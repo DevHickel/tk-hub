@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Users, FileText, Activity, Search, Trash2, Upload, Eye, MessageSquare, Mail, Copy, UserPlus } from 'lucide-react';
+import { Users, FileText, Activity, Search, Trash2, Upload, MessageSquare, Mail, Copy, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,6 +40,12 @@ interface Document {
   metadata: unknown;
 }
 
+interface GroupedDocument {
+  name: string;
+  totalPages: number;
+  ids: number[];
+}
+
 interface Invite {
   id: string;
   email: string;
@@ -50,19 +56,40 @@ interface Invite {
   expires_at: string;
 }
 
+// Mapa de ações para nomes amigáveis
+const actionLabels: Record<string, string> = {
+  'message_sent': 'Mensagem',
+  'document_uploaded': 'Upload de Documento',
+  'document_deleted': 'Documento Excluído',
+  'permission_changed': 'Permissão Alterada',
+  'user_login': 'Login',
+  'user_logout': 'Logout',
+  'invite_sent': 'Convite Enviado',
+  'profile_updated': 'Perfil Atualizado',
+};
+
+const getActionLabel = (action: string): string => {
+  return actionLabels[action] || action;
+};
+
 export default function Admin() {
   const navigate = useNavigate();
-  const { profile, user } = useAuth();
+  const { profile, user, appRoles } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [docSearchTerm, setDocSearchTerm] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { isAdmin } = useAuth();
+  const isTkMaster = appRoles.includes('tk_master');
 
   useEffect(() => {
     if (!isAdmin) {
@@ -123,6 +150,7 @@ export default function Admin() {
     const { data, error } = await supabase
       .from('invites')
       .select('*')
+      .neq('status', 'accepted') // Não mostrar convites aceitos
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -182,6 +210,20 @@ export default function Admin() {
     toast.success('Link copiado para a área de transferência!');
   };
 
+  const deleteInvite = async (inviteId: string) => {
+    const { error } = await supabase
+      .from('invites')
+      .delete()
+      .eq('id', inviteId);
+
+    if (error) {
+      toast.error('Erro ao excluir convite');
+      return;
+    }
+    toast.success('Convite excluído');
+    fetchInvites();
+  };
+
   const getStatusBadge = (status: string, expiresAt: string) => {
     const isExpired = new Date(expiresAt) < new Date();
     if (isExpired && status === 'pending') {
@@ -211,25 +253,37 @@ export default function Admin() {
     fetchUsers();
   };
 
-  const updateAccountStatus = async (userId: string, status: string) => {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ account_status: status })
-      .eq('id', userId);
-    
-    if (error) {
-      toast.error('Erro ao atualizar status');
+  const deleteUser = async (userId: string) => {
+    // Apenas TK Masters podem deletar usuários
+    if (!isTkMaster) {
+      toast.error('Sem permissão para excluir usuários');
       return;
     }
-    toast.success('Status atualizado');
+
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    
+    if (error) {
+      // Se não conseguir via admin API, deletar apenas o profile
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) {
+        toast.error('Erro ao excluir usuário');
+        return;
+      }
+    }
+    
+    toast.success('Usuário excluído');
     fetchUsers();
   };
 
-  const deleteDocument = async (docId: number) => {
+  const deleteDocument = async (docIds: number[]) => {
     const { error } = await supabase
       .from('documents')
       .delete()
-      .eq('id', docId);
+      .in('id', docIds);
     
     if (error) {
       toast.error('Erro ao excluir documento');
@@ -238,6 +292,88 @@ export default function Admin() {
     toast.success('Documento excluído');
     fetchDocuments();
   };
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      const response = await fetch('https://n8n.vetorix.com.br/form/7fe68a76-3359-4fb9-8e63-4909d487f04e', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        toast.success('Documento enviado para processamento!');
+        setTimeout(() => fetchDocuments(), 3000); // Refresh após 3s
+      } else {
+        toast.error('Erro ao enviar documento');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      toast.error('Erro ao enviar documento');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  // Agrupar documentos por nome de arquivo
+  const groupedDocuments: GroupedDocument[] = documents.reduce((acc, doc) => {
+    const metadata = doc.metadata as Record<string, unknown> | null;
+    const source = (metadata?.source as string) || `Documento ${doc.id}`;
+    const existing = acc.find(d => d.name === source);
+    
+    if (existing) {
+      existing.totalPages++;
+      existing.ids.push(doc.id);
+    } else {
+      acc.push({
+        name: source,
+        totalPages: 1,
+        ids: [doc.id],
+      });
+    }
+    
+    return acc;
+  }, [] as GroupedDocument[]);
+
+  const filteredDocuments = groupedDocuments.filter(doc =>
+    doc.name.toLowerCase().includes(docSearchTerm.toLowerCase())
+  );
+
+  // Contar mensagens por usuário
+  const messageCountByUser = activityLogs.reduce((acc, log) => {
+    if (log.action === 'message_sent') {
+      const userName = log.profiles?.full_name || log.profiles?.email || log.user_id;
+      acc[userName] = (acc[userName] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
 
   const filteredUsers = users.filter(user =>
     user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -314,20 +450,20 @@ export default function Admin() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Cargo</TableHead>
-                      <TableHead>Status</TableHead>
                       <TableHead>Último Acesso</TableHead>
+                      {isTkMaster && <TableHead className="w-16">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.full_name || '-'}</TableCell>
-                        <TableCell>{user.email || '-'}</TableCell>
+                    {filteredUsers.map((userItem) => (
+                      <TableRow key={userItem.id}>
+                        <TableCell className="font-medium">{userItem.full_name || '-'}</TableCell>
+                        <TableCell>{userItem.email || '-'}</TableCell>
                         <TableCell>
                           <Select
-                            value={user.role}
-                            onValueChange={(value: 'admin' | 'user') => updateUserRole(user.id, value)}
-                            disabled={user.id === profile?.id}
+                            value={userItem.role}
+                            onValueChange={(value: 'admin' | 'user') => updateUserRole(userItem.id, value)}
+                            disabled={userItem.id === profile?.id}
                           >
                             <SelectTrigger className="w-28">
                               <SelectValue />
@@ -339,25 +475,23 @@ export default function Admin() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={user.account_status || 'active'}
-                            onValueChange={(value) => updateAccountStatus(user.id, value)}
-                            disabled={user.id === profile?.id}
-                          >
-                            <SelectTrigger className="w-28">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="active">Ativo</SelectItem>
-                              <SelectItem value="suspended">Suspenso</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          {user.last_sign_in_at 
-                            ? format(new Date(user.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                          {userItem.last_sign_in_at 
+                            ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
                             : '-'}
                         </TableCell>
+                        {isTkMaster && (
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteUser(userItem.id)}
+                              disabled={userItem.id === profile?.id}
+                              title="Excluir usuário"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -397,7 +531,7 @@ export default function Admin() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Convites Enviados</h3>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Convites Pendentes</h3>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -409,34 +543,49 @@ export default function Admin() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {invites.map((invite) => (
-                        <TableRow key={invite.id}>
-                          <TableCell className="font-medium">{invite.email}</TableCell>
-                          <TableCell>{getStatusBadge(invite.status, invite.expires_at)}</TableCell>
-                          <TableCell>
-                            {format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            {format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            {invite.status === 'pending' && new Date(invite.expires_at) > new Date() && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => copyInviteLink(invite.token, invite.email)}
-                                title="Copiar link de convite"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {invites.map((invite) => {
+                        const isExpired = new Date(invite.expires_at) < new Date();
+                        return (
+                          <TableRow key={invite.id}>
+                            <TableCell className="font-medium">{invite.email}</TableCell>
+                            <TableCell>{getStatusBadge(invite.status, invite.expires_at)}</TableCell>
+                            <TableCell>
+                              {format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell>
+                              {format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-1">
+                                {invite.status === 'pending' && !isExpired && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => copyInviteLink(invite.token, invite.email)}
+                                    title="Copiar link de convite"
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {(isExpired || invite.status !== 'pending') && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => deleteInvite(invite.id)}
+                                    title="Excluir convite"
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       {invites.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            Nenhum convite enviado ainda
+                            Nenhum convite pendente
                           </TableCell>
                         </TableRow>
                       )}
@@ -459,26 +608,35 @@ export default function Admin() {
                       <TableHead>Data/Hora</TableHead>
                       <TableHead>Usuário</TableHead>
                       <TableHead>Ação</TableHead>
-                      <TableHead>Detalhes</TableHead>
+                      <TableHead>Contador</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {activityLogs.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell>
-                          {log.timestamp 
-                            ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
-                            : '-'}
-                        </TableCell>
-                        <TableCell>{log.profiles?.full_name || log.profiles?.email || '-'}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{log.action}</Badge>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {log.details ? JSON.stringify(log.details) : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {activityLogs.map((log) => {
+                      const userName = log.profiles?.full_name || log.profiles?.email || '-';
+                      const messageCount = log.action === 'message_sent' ? messageCountByUser[userName] || 0 : null;
+                      
+                      return (
+                        <TableRow key={log.id}>
+                          <TableCell>
+                            {log.timestamp 
+                              ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{userName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{getActionLabel(log.action)}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {messageCount !== null ? (
+                              <Badge variant="secondary">{messageCount}</Badge>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -486,56 +644,111 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="documents">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Gestão de Documentos</span>
-                  <Button className="flex items-center gap-2">
-                    <Upload className="h-4 w-4" />
-                    Upload
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Conteúdo</TableHead>
-                      <TableHead>Metadata</TableHead>
-                      <TableHead className="w-24">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {documents.map((doc) => (
-                      <TableRow key={doc.id}>
-                        <TableCell>{doc.id}</TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {doc.content?.substring(0, 100) || '-'}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {doc.metadata ? JSON.stringify(doc.metadata) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="icon">
-                              <Eye className="h-4 w-4" />
-                            </Button>
+            <div className="space-y-6">
+              {/* Upload Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upload de Documento</CardTitle>
+                  <CardDescription>Envie arquivos PDF para processamento e indexação</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`
+                      relative border-2 border-dashed rounded-lg p-8 text-center 
+                      transition-all duration-300 ease-in-out cursor-pointer
+                      ${isDragOver 
+                        ? 'border-primary bg-primary/10 scale-[1.02]' 
+                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                      }
+                      ${isUploading ? 'opacity-50 pointer-events-none' : ''}
+                    `}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                    />
+                    <div className={`flex flex-col items-center gap-3 transition-transform duration-300 ${isDragOver ? 'scale-110' : ''}`}>
+                      <Upload className={`h-10 w-10 transition-colors duration-300 ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <div>
+                        <p className="font-medium">
+                          {isUploading ? 'Enviando...' : 'Arraste arquivos aqui ou clique para selecionar'}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Suporta arquivos PDF
+                        </p>
+                      </div>
+                    </div>
+                    {isUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-lg">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Documents List */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Documentos Processados</CardTitle>
+                  <CardDescription>Gerencie e exclua documentos indexados no sistema</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar por nome do arquivo..."
+                      value={docSearchTerm}
+                      onChange={(e) => setDocSearchTerm(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome do Arquivo</TableHead>
+                        <TableHead className="text-right">Total de Páginas/Chunks</TableHead>
+                        <TableHead className="w-20 text-center">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDocuments.map((doc) => (
+                        <TableRow key={doc.name}>
+                          <TableCell className="font-medium">{doc.name}</TableCell>
+                          <TableCell className="text-right">{doc.totalPages}</TableCell>
+                          <TableCell className="text-center">
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              onClick={() => deleteDocument(doc.id)}
+                              onClick={() => deleteDocument(doc.ids)}
+                              title="Excluir documento"
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {filteredDocuments.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                            Nenhum documento encontrado
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>
