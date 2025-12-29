@@ -16,14 +16,22 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-interface Profile {
+type AppRole = 'admin' | 'user' | 'tk_master';
+
+interface UserWithRole {
   id: string;
   email: string | null;
   full_name: string | null;
-  role: 'admin' | 'user';
   account_status: string | null;
   last_sign_in_at: string | null;
+  app_role: AppRole;
 }
+
+const roleLabels: Record<AppRole, string> = {
+  tk_master: 'TK Owner',
+  admin: 'Admin',
+  user: 'Usuário',
+};
 
 interface ActivityLog {
   id: number;
@@ -75,7 +83,7 @@ const getActionLabel = (action: string): string => {
 export default function Admin() {
   const navigate = useNavigate();
   const { profile, user, appRoles } = useAuth();
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [users, setUsers] = useState<UserWithRole[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -107,16 +115,36 @@ export default function Admin() {
   };
 
   const fetchUsers = async () => {
-    const { data, error } = await supabase
+    // Fetch profiles
+    const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
       .order('full_name');
     
-    if (error) {
+    if (profilesError) {
       toast.error('Erro ao carregar usuários');
       return;
     }
-    setUsers(data || []);
+
+    // Fetch user_roles to get actual app roles
+    const { data: rolesData } = await supabase
+      .from('user_roles')
+      .select('user_id, role');
+
+    const rolesMap = new Map<string, AppRole>();
+    rolesData?.forEach(r => rolesMap.set(r.user_id, r.role as AppRole));
+
+    // Combine profiles with their app roles
+    const usersWithRoles: UserWithRole[] = (profilesData || []).map(p => ({
+      id: p.id,
+      email: p.email,
+      full_name: p.full_name,
+      account_status: p.account_status,
+      last_sign_in_at: p.last_sign_in_at,
+      app_role: rolesMap.get(p.id) || 'user',
+    }));
+
+    setUsers(usersWithRoles);
   };
 
   const fetchActivityLogs = async () => {
@@ -254,22 +282,8 @@ export default function Admin() {
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: 'admin' | 'user') => {
-    // Update profile role
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ role: newRole })
-      .eq('id', userId);
-    
-    if (profileError) {
-      toast.error('Erro ao atualizar cargo');
-      return;
-    }
-
-    // Also update user_roles table
-    const appRole = newRole === 'admin' ? 'admin' : 'user';
-    
-    // First try to update existing role
+  const updateUserRole = async (userId: string, newRole: AppRole) => {
+    // Update user_roles table (this is the source of truth)
     const { data: existingRole } = await supabase
       .from('user_roles')
       .select('id')
@@ -280,22 +294,33 @@ export default function Admin() {
       // Update existing role
       const { error: roleError } = await supabase
         .from('user_roles')
-        .update({ role: appRole })
+        .update({ role: newRole })
         .eq('user_id', userId);
       
       if (roleError) {
+        toast.error('Erro ao atualizar cargo');
         console.error('Error updating user_roles:', roleError);
+        return;
       }
     } else {
       // Insert new role if doesn't exist
       const { error: insertError } = await supabase
         .from('user_roles')
-        .insert({ user_id: userId, role: appRole });
+        .insert({ user_id: userId, role: newRole });
       
       if (insertError) {
+        toast.error('Erro ao atualizar cargo');
         console.error('Error inserting user_role:', insertError);
+        return;
       }
     }
+
+    // Also update profile role for backwards compatibility (admin/user only)
+    const profileRole = newRole === 'user' ? 'user' : 'admin';
+    await supabase
+      .from('profiles')
+      .update({ role: profileRole })
+      .eq('id', userId);
 
     toast.success('Cargo atualizado');
     fetchUsers();
@@ -518,14 +543,15 @@ export default function Admin() {
                         <TableCell>{userItem.email || '-'}</TableCell>
                         <TableCell>
                           <Select
-                            value={userItem.role}
-                            onValueChange={(value: 'admin' | 'user') => updateUserRole(userItem.id, value)}
-                            disabled={userItem.id === profile?.id}
+                            value={userItem.app_role}
+                            onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}
+                            disabled={userItem.id === profile?.id || !isTkMaster}
                           >
-                            <SelectTrigger className="w-28">
-                              <SelectValue />
+                            <SelectTrigger className="w-32">
+                              <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
+                              {isTkMaster && <SelectItem value="tk_master">TK Owner</SelectItem>}
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="user">Usuário</SelectItem>
                             </SelectContent>
