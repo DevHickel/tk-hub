@@ -76,36 +76,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        const [profileData, roles] = await Promise.all([
-          fetchProfile(session.user.id),
-          fetchAppRoles(session.user.id)
-        ]);
-        setProfile(profileData);
-        setAppRoles(roles);
+        setTimeout(() => {
+          Promise.all([
+            fetchProfile(session.user.id),
+            fetchAppRoles(session.user.id)
+          ]).then(([profileData, roles]) => {
+            setProfile(profileData);
+            setAppRoles(roles);
+            setLoading(false);
+          });
+        }, 0);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+        
         if (session?.user) {
-          const [profileData, roles] = await Promise.all([
-            fetchProfile(session.user.id),
-            fetchAppRoles(session.user.id)
-          ]);
-          setProfile(profileData);
-          setAppRoles(roles);
+          setTimeout(() => {
+            Promise.all([
+              fetchProfile(session.user.id),
+              fetchAppRoles(session.user.id)
+            ]).then(([profileData, roles]) => {
+              setProfile(profileData);
+              setAppRoles(roles);
+              setLoading(false);
+            });
+          }, 0);
         } else {
           setProfile(null);
           setAppRoles([]);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
