@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Users, FileText, Activity, Search, Trash2, Upload, Eye } from 'lucide-react';
+import { ArrowLeft, Users, FileText, Activity, Search, Trash2, Upload, Eye, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -164,13 +164,16 @@ export default function Admin() {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/chat')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <Logo size="sm" />
             <h1 className="text-xl font-semibold">Administração</h1>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate('/chat')} className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Ir para Chat
+            </Button>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
