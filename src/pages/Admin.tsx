@@ -138,39 +138,41 @@ export default function Admin() {
       return;
     }
 
-    // Check if email is already invited
-    const existingInvite = invites.find(i => i.email === inviteEmail && i.status === 'pending');
-    if (existingInvite) {
-      toast.error('Este email já possui um convite pendente');
-      return;
-    }
-
-    // Check if user already exists
-    const existingUser = users.find(u => u.email === inviteEmail);
-    if (existingUser) {
-      toast.error('Este email já está cadastrado');
-      return;
-    }
-
     setIsSendingInvite(true);
 
-    const { error } = await supabase
-      .from('invites')
-      .insert({
-        email: inviteEmail,
-        invited_by: user?.id,
+    try {
+      const { data, error } = await supabase.functions.invoke('send-invite', {
+        body: {
+          email: inviteEmail,
+          invitedBy: user?.id,
+        },
       });
 
-    if (error) {
-      toast.error('Erro ao enviar convite');
-      setIsSendingInvite(false);
-      return;
-    }
+      if (error) {
+        console.error('Error sending invite:', error);
+        toast.error('Erro ao enviar convite');
+        return;
+      }
 
-    toast.success('Convite criado com sucesso!');
-    setInviteEmail('');
-    fetchInvites();
-    setIsSendingInvite(false);
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data?.warning) {
+        toast.warning(data.warning);
+      } else {
+        toast.success('Convite enviado com sucesso! Email enviado para ' + inviteEmail);
+      }
+
+      setInviteEmail('');
+      fetchInvites();
+    } catch (err) {
+      console.error('Error:', err);
+      toast.error('Erro ao enviar convite');
+    } finally {
+      setIsSendingInvite(false);
+    }
   };
 
   const copyInviteLink = (token: string, email: string) => {
