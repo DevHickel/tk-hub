@@ -229,6 +229,42 @@ export type Database = {
         }
         Relationships: []
       }
+      knowledge_feedback: {
+        Row: {
+          created_at: string | null
+          embedding: string | null
+          id: string
+          pergunta_original: string
+          peso_atual: number | null
+          resposta_ia: string
+          updated_at: string | null
+          votos_negativos: number | null
+          votos_positivos: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          pergunta_original: string
+          peso_atual?: number | null
+          resposta_ia: string
+          updated_at?: string | null
+          votos_negativos?: number | null
+          votos_positivos?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          pergunta_original?: string
+          peso_atual?: number | null
+          resposta_ia?: string
+          updated_at?: string | null
+          votos_negativos?: number | null
+          votos_positivos?: number | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string

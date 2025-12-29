@@ -16,6 +16,8 @@ interface Message {
   conversation_id: string;
   created_at: string;
   feedback?: 'like' | 'dislike' | null;
+  feedbackCounts?: { positive: number; negative: number };
+  feedbackLoading?: boolean;
 }
 
 interface Conversation {
@@ -302,15 +304,78 @@ export default function Chat() {
   };
 
   const handleFeedback = async (messageId: string, feedback: 'like' | 'dislike') => {
+    // Find the AI message and the previous user message
+    const messageIndex = messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const aiMessage = messages[messageIndex];
+    
+    // Find the previous user message
+    let userMessage = '';
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userMessage = messages[i].content;
+        break;
+      }
+    }
+
+    // Set loading state
     setMessages(prev => prev.map(m => 
-      m.id === messageId ? { ...m, feedback } : m
+      m.id === messageId ? { ...m, feedbackLoading: true } : m
     ));
 
-    // Here you could save feedback to database if needed
-    toast({
-      title: feedback === 'like' ? 'Obrigado!' : 'Feedback registrado',
-      description: 'Seu feedback ajuda a melhorar o Tkzinho.',
-    });
+    try {
+      // Call feedback webhook
+      const response = await fetch('https://n8n.vetorix.com.br/webhook-test/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pergunta_original: userMessage,
+          resposta_ia: aiMessage.content,
+          voto: feedback === 'like' ? 'positivo' : 'negativo',
+        }),
+      });
+
+      if (response.ok) {
+        // Update message with feedback and increment counter
+        setMessages(prev => prev.map(m => {
+          if (m.id === messageId) {
+            const currentCounts = m.feedbackCounts || { positive: 0, negative: 0 };
+            return { 
+              ...m, 
+              feedback,
+              feedbackLoading: false,
+              feedbackCounts: {
+                positive: currentCounts.positive + (feedback === 'like' ? 1 : 0),
+                negative: currentCounts.negative + (feedback === 'dislike' ? 1 : 0),
+              }
+            };
+          }
+          return m;
+        }));
+
+        toast({
+          title: 'Obrigado pelo feedback!',
+        });
+      } else {
+        throw new Error('Webhook response not ok');
+      }
+    } catch (error) {
+      console.error('Error sending feedback:', error);
+      
+      // Reset loading state
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, feedbackLoading: false } : m
+      ));
+
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível enviar o feedback.',
+      });
+    }
   };
 
   if (loading) {
@@ -355,18 +420,34 @@ export default function Chat() {
                 </p>
               </div>
             ) : (
-              messages.map((message) => (
-                <ChatMessage
-                  key={message.id}
-                  id={message.id}
-                  content={message.content}
-                  role={message.role}
-                  userAvatar={profile?.avatar_url}
-                  userName={profile?.full_name || profile?.email || 'Você'}
-                  onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
-                  currentFeedback={message.feedback}
-                />
-              ))
+              messages.map((message, index) => {
+                // Find previous user message for AI messages
+                let previousUserMessage = '';
+                if (message.role === 'assistant') {
+                  for (let i = index - 1; i >= 0; i--) {
+                    if (messages[i].role === 'user') {
+                      previousUserMessage = messages[i].content;
+                      break;
+                    }
+                  }
+                }
+                
+                return (
+                  <ChatMessage
+                    key={message.id}
+                    id={message.id}
+                    content={message.content}
+                    role={message.role}
+                    userAvatar={profile?.avatar_url}
+                    userName={profile?.full_name || profile?.email || 'Você'}
+                    onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
+                    currentFeedback={message.feedback}
+                    feedbackCounts={message.feedbackCounts}
+                    feedbackLoading={message.feedbackLoading}
+                    previousUserMessage={previousUserMessage}
+                  />
+                );
+              })
             )}
             
             {isLoading && (
