@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, User, Moon, Lock, Save } from 'lucide-react';
+import { ArrowLeft, User, Moon, Lock, Save, Camera, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -20,10 +21,9 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) {
@@ -35,6 +35,8 @@ export default function Settings() {
     if (!user) return;
     
     setIsSaving(true);
+    
+    // Update profile with full_name (display name)
     const { error } = await supabase
       .from('profiles')
       .update({ 
@@ -46,37 +48,99 @@ export default function Settings() {
     if (error) {
       toast.error('Erro ao salvar configurações');
     } else {
+      // Also update user metadata (display name)
+      await supabase.auth.updateUser({
+        data: { full_name: fullName }
+      });
+      
       toast.success('Configurações salvas');
       refreshProfile();
     }
     setIsSaving(false);
   };
 
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast.error('As senhas não coincidem');
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Por favor, selecione uma imagem');
       return;
     }
 
-    if (newPassword.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 2MB');
       return;
     }
 
-    setIsSaving(true);
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword
+    setIsUploadingAvatar(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // Upload to avatars bucket
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      toast.success('Foto de perfil atualizada!');
+      refreshProfile();
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.error('Erro ao fazer upload da imagem');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleResetPasswordRequest = async () => {
+    if (!user?.email) return;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
     });
 
     if (error) {
-      toast.error('Erro ao alterar senha');
+      toast.error('Erro ao enviar email de recuperação');
     } else {
-      toast.success('Senha alterada com sucesso');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      toast.success('Email de recuperação enviado! Verifique sua caixa de entrada.');
     }
-    setIsSaving(false);
+  };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -105,7 +169,45 @@ export default function Settings() {
               Gerencie suas informações pessoais
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* Avatar Upload */}
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={profile?.avatar_url || undefined} alt={fullName} />
+                  <AvatarFallback className="text-lg">{getInitials(fullName)}</AvatarFallback>
+                </Avatar>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="absolute -bottom-1 -right-1 h-8 w-8 rounded-full shadow-md"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                >
+                  {isUploadingAvatar ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <Camera className="h-4 w-4" />
+                  )}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarUpload}
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Foto de Perfil</p>
+                <p className="text-xs text-muted-foreground">
+                  Clique no ícone para alterar sua foto
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="space-y-2">
               <Label htmlFor="fullName">Nome Completo</Label>
               <Input
@@ -114,6 +216,9 @@ export default function Settings() {
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Seu nome completo"
               />
+              <p className="text-xs text-muted-foreground">
+                Este nome será exibido no chat e em outros lugares
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -168,38 +273,28 @@ export default function Settings() {
               Segurança
             </CardTitle>
             <CardDescription>
-              Altere sua senha de acesso
+              Gerencie sua senha de acesso
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Separator />
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">Nova Senha</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Digite a nova senha"
-              />
+            <div className="p-4 rounded-lg bg-muted/50 border border-border">
+              <div className="flex items-start gap-3">
+                <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="space-y-2 flex-1">
+                  <p className="font-medium">Alterar Senha</p>
+                  <p className="text-sm text-muted-foreground">
+                    Enviaremos um email com um link seguro para você redefinir sua senha.
+                  </p>
+                  <Button 
+                    onClick={handleResetPasswordRequest}
+                    variant="outline"
+                    className="mt-2"
+                  >
+                    Enviar Email de Recuperação
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirme a nova senha"
-              />
-            </div>
-            <Button 
-              onClick={handleChangePassword} 
-              disabled={isSaving || !newPassword || !confirmPassword}
-              variant="outline"
-            >
-              Alterar Senha
-            </Button>
           </CardContent>
         </Card>
       </main>
