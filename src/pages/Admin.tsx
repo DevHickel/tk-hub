@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Users, FileText, Activity, Search, Trash2, Upload, Eye, MessageSquare } from 'lucide-react';
+import { Users, FileText, Activity, Search, Trash2, Upload, Eye, MessageSquare, Mail, Copy, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -40,14 +40,27 @@ interface Document {
   metadata: unknown;
 }
 
+interface Invite {
+  id: string;
+  email: string;
+  invited_by: string;
+  token: string;
+  status: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export default function Admin() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [users, setUsers] = useState<Profile[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
 
   const { isAdmin } = useAuth();
 
@@ -62,7 +75,7 @@ export default function Admin() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchUsers(), fetchActivityLogs(), fetchDocuments()]);
+    await Promise.all([fetchUsers(), fetchActivityLogs(), fetchDocuments(), fetchInvites()]);
     setIsLoading(false);
   };
 
@@ -104,6 +117,82 @@ export default function Admin() {
       return;
     }
     setDocuments(data || []);
+  };
+
+  const fetchInvites = async () => {
+    const { data, error } = await supabase
+      .from('invites')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching invites:', error);
+      return;
+    }
+    setInvites(data || []);
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) {
+      toast.error('Digite um email válido');
+      return;
+    }
+
+    // Check if email is already invited
+    const existingInvite = invites.find(i => i.email === inviteEmail && i.status === 'pending');
+    if (existingInvite) {
+      toast.error('Este email já possui um convite pendente');
+      return;
+    }
+
+    // Check if user already exists
+    const existingUser = users.find(u => u.email === inviteEmail);
+    if (existingUser) {
+      toast.error('Este email já está cadastrado');
+      return;
+    }
+
+    setIsSendingInvite(true);
+
+    const { error } = await supabase
+      .from('invites')
+      .insert({
+        email: inviteEmail,
+        invited_by: user?.id,
+      });
+
+    if (error) {
+      toast.error('Erro ao enviar convite');
+      setIsSendingInvite(false);
+      return;
+    }
+
+    toast.success('Convite criado com sucesso!');
+    setInviteEmail('');
+    fetchInvites();
+    setIsSendingInvite(false);
+  };
+
+  const copyInviteLink = (token: string, email: string) => {
+    const baseUrl = window.location.origin;
+    const link = `${baseUrl}/register?token=${token}&email=${encodeURIComponent(email)}`;
+    navigator.clipboard.writeText(link);
+    toast.success('Link copiado para a área de transferência!');
+  };
+
+  const getStatusBadge = (status: string, expiresAt: string) => {
+    const isExpired = new Date(expiresAt) < new Date();
+    if (isExpired && status === 'pending') {
+      return <Badge variant="destructive">Expirado</Badge>;
+    }
+    switch (status) {
+      case 'pending':
+        return <Badge variant="secondary">Pendente</Badge>;
+      case 'accepted':
+        return <Badge variant="default">Aceito</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
   };
 
   const updateUserRole = async (userId: string, newRole: 'admin' | 'user') => {
@@ -181,10 +270,14 @@ export default function Admin() {
 
       <main className="container mx-auto px-4 py-6">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Usuários
+            </TabsTrigger>
+            <TabsTrigger value="invites" className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Convites
             </TabsTrigger>
             <TabsTrigger value="logs" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
@@ -267,6 +360,87 @@ export default function Admin() {
                     ))}
                   </TableBody>
                 </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="invites">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Convidar Usuários</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <Input
+                      type="email"
+                      placeholder="Email do convidado..."
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
+                    />
+                  </div>
+                  <Button onClick={sendInvite} disabled={isSendingInvite} className="flex items-center gap-2">
+                    {isSendingInvite ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent" />
+                    ) : (
+                      <>
+                        <UserPlus className="h-4 w-4" />
+                        Enviar Convite
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Convites Enviados</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Criado em</TableHead>
+                        <TableHead>Expira em</TableHead>
+                        <TableHead className="w-24">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invites.map((invite) => (
+                        <TableRow key={invite.id}>
+                          <TableCell className="font-medium">{invite.email}</TableCell>
+                          <TableCell>{getStatusBadge(invite.status, invite.expires_at)}</TableCell>
+                          <TableCell>
+                            {format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {invite.status === 'pending' && new Date(invite.expires_at) > new Date() && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => copyInviteLink(invite.token, invite.email)}
+                                title="Copiar link de convite"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {invites.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                            Nenhum convite enviado ainda
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

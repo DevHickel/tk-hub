@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,11 +10,25 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+interface Invite {
+  id: string;
+  email: string;
+  token: string;
+  status: string;
+  expires_at: string;
+}
+
 export default function Register() {
   const [searchParams] = useSearchParams();
-  const inviteEmail = searchParams.get('email') || '';
+  const inviteToken = searchParams.get('token');
+  const inviteEmailParam = searchParams.get('email') || '';
   
-  const [email, setEmail] = useState(inviteEmail);
+  const [invite, setInvite] = useState<Invite | null>(null);
+  const [isValidating, setIsValidating] = useState(true);
+  const [isInvalidInvite, setIsInvalidInvite] = useState(false);
+  const [invalidReason, setInvalidReason] = useState('');
+  
+  const [email, setEmail] = useState(inviteEmailParam);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -26,10 +40,48 @@ export default function Register() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (inviteEmail) {
-      setEmail(inviteEmail);
+    validateInvite();
+  }, [inviteToken]);
+
+  const validateInvite = async () => {
+    if (!inviteToken) {
+      setIsValidating(false);
+      setIsInvalidInvite(true);
+      setInvalidReason('O cadastro é apenas por convite. Entre em contato com um administrador para receber seu convite.');
+      return;
     }
-  }, [inviteEmail]);
+
+    const { data, error } = await supabase
+      .from('invites')
+      .select('*')
+      .eq('token', inviteToken)
+      .single();
+
+    if (error || !data) {
+      setIsValidating(false);
+      setIsInvalidInvite(true);
+      setInvalidReason('Convite inválido ou não encontrado.');
+      return;
+    }
+
+    if (data.status === 'accepted') {
+      setIsValidating(false);
+      setIsInvalidInvite(true);
+      setInvalidReason('Este convite já foi utilizado.');
+      return;
+    }
+
+    if (new Date(data.expires_at) < new Date()) {
+      setIsValidating(false);
+      setIsInvalidInvite(true);
+      setInvalidReason('Este convite expirou. Solicite um novo convite ao administrador.');
+      return;
+    }
+
+    setInvite(data);
+    setEmail(data.email);
+    setIsValidating(false);
+  };
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, '');
@@ -83,18 +135,44 @@ export default function Register() {
         title: 'Erro ao criar conta',
         description: error.message,
       });
-    } else {
-      toast({
-        title: 'Conta criada!',
-        description: 'Verifique seu email para confirmar a conta.',
-      });
-      navigate('/login');
+      setLoading(false);
+      return;
     }
 
+    // Mark invite as accepted
+    if (invite) {
+      await supabase
+        .from('invites')
+        .update({ status: 'accepted' })
+        .eq('id', invite.id);
+    }
+
+    toast({
+      title: 'Conta criada!',
+      description: 'Verifique seu email para confirmar a conta.',
+    });
+    navigate('/login');
     setLoading(false);
   };
 
-  if (!inviteEmail) {
+  if (isValidating) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+        
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Validando convite...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isInvalidInvite) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <div className="absolute top-4 right-4">
@@ -109,7 +187,7 @@ export default function Register() {
               </div>
               <CardTitle className="text-2xl">Acesso Restrito</CardTitle>
               <CardDescription>
-                O cadastro é apenas por convite. Entre em contato com um administrador para receber seu convite.
+                {invalidReason}
               </CardDescription>
             </CardHeader>
             <CardContent>
