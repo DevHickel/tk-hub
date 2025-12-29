@@ -223,7 +223,7 @@ export default function BugReport() {
 
       // Send to webhook
       try {
-        await fetch('https://n8n.vetorix.com.br/webhook-test/18b9789c-327b-4d33-9eff-d2485fb389a9', {
+        await fetch('https://n8n.vetorix.com.br/webhook/18b9789c-327b-4d33-9eff-d2485fb389a9', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
