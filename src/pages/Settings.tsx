@@ -79,27 +79,40 @@ export default function Settings() {
 
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}.${fileExt}`;
+      const timestamp = Date.now();
+      const fileName = `${user.id}_${timestamp}.${fileExt}`;
       const filePath = `${fileName}`;
 
-      // Upload to avatars bucket
+      // Try to delete old avatar files first (ignore errors)
+      const { data: existingFiles } = await supabase.storage
+        .from('avatars')
+        .list('', { search: user.id });
+      
+      if (existingFiles && existingFiles.length > 0) {
+        const filesToDelete = existingFiles.map(f => f.name);
+        await supabase.storage.from('avatars').remove(filesToDelete);
+      }
+
+      // Upload new avatar to avatars bucket
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file);
 
       if (uploadError) {
         throw uploadError;
       }
 
-      // Get public URL
+      // Get public URL with cache-busting timestamp
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
 
+      const urlWithCacheBust = `${publicUrl}?t=${timestamp}`;
+
       // Update profile with avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: publicUrl })
+        .update({ avatar_url: urlWithCacheBust })
         .eq('id', user.id);
 
       if (updateError) {
@@ -107,7 +120,7 @@ export default function Settings() {
       }
 
       toast.success('Foto de perfil atualizada!');
-      refreshProfile();
+      await refreshProfile();
     } catch (error) {
       console.error('Error uploading avatar:', error);
       toast.error('Erro ao fazer upload da imagem');
