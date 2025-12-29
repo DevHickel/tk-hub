@@ -26,7 +26,7 @@ interface BugReportData {
 
 export default function BugReport() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, appRoles } = useAuth();
   const [description, setDescription] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -36,10 +36,10 @@ export default function BugReport() {
   const [isHoveringUpload, setIsHoveringUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isAdmin = profile?.role === 'admin';
+  const canManageReports = profile?.role === 'admin' || appRoles.includes('admin') || appRoles.includes('tk_master');
 
   const fetchReports = async () => {
-    if (!isAdmin) return;
+    if (!canManageReports) return;
     
     setIsLoadingReports(true);
     const { data, error } = await supabase
@@ -93,6 +93,7 @@ export default function BugReport() {
     let screenshotUrl: string | null = null;
 
     try {
+      // Upload screenshot if present
       if (screenshot) {
         const fileExt = screenshot.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}.${fileExt}`;
@@ -111,6 +112,7 @@ export default function BugReport() {
         }
       }
 
+      // Insert into database
       const { error } = await supabase
         .from('bug_reports')
         .insert({
@@ -121,6 +123,25 @@ export default function BugReport() {
 
       if (error) {
         throw error;
+      }
+
+      // Send to webhook
+      try {
+        await fetch('https://n8n.vetorix.com.br/webhook/18b9789c-327b-4d33-9eff-d2485fb389a9', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            empresa: 'TK Solution',
+            usuario: profile?.full_name || profile?.email || user.email || 'Usuário desconhecido',
+            descricao: description.trim(),
+            link_imagem: screenshotUrl || null
+          }),
+        });
+      } catch (webhookError) {
+        console.error('Webhook error:', webhookError);
+        // Don't fail the submission if webhook fails
       }
 
       toast.success('Report enviado com sucesso!');
@@ -150,7 +171,7 @@ export default function BugReport() {
       </header>
 
       <main className="container mx-auto px-4 py-6 max-w-3xl">
-        {isAdmin ? (
+        {canManageReports ? (
           <Tabs defaultValue="send" className="space-y-6" onValueChange={(v) => v === 'manage' && fetchReports()}>
             <TabsList className="grid w-full max-w-md grid-cols-2">
               <TabsTrigger value="send" className="flex items-center gap-2">
