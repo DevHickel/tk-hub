@@ -9,8 +9,11 @@ interface ChatMessageProps {
   role: 'user' | 'assistant';
   userAvatar?: string | null;
   userName?: string;
-  onFeedback?: (messageId: string, feedback: 'like' | 'dislike') => void;
+  onFeedback?: (messageId: string, feedback: 'like' | 'dislike') => Promise<void>;
   currentFeedback?: 'like' | 'dislike' | null;
+  feedbackCounts?: { positive: number; negative: number };
+  feedbackLoading?: boolean;
+  previousUserMessage?: string;
 }
 
 export function ChatMessage({ 
@@ -20,9 +23,13 @@ export function ChatMessage({
   userAvatar, 
   userName,
   onFeedback,
-  currentFeedback 
+  currentFeedback,
+  feedbackCounts,
+  feedbackLoading = false,
+  previousUserMessage
 }: ChatMessageProps) {
   const isUser = role === 'user';
+  const hasVoted = currentFeedback !== null && currentFeedback !== undefined;
 
   return (
     <div className={cn(
@@ -62,29 +69,45 @@ export function ChatMessage({
         </div>
 
         {!isUser && onFeedback && (
-          <div className="flex gap-1 mt-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-6 w-6',
-                currentFeedback === 'like' && 'text-green-500'
-              )}
-              onClick={() => onFeedback(id, 'like')}
-            >
-              <ThumbsUp className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={cn(
-                'h-6 w-6',
-                currentFeedback === 'dislike' && 'text-red-500'
-              )}
-              onClick={() => onFeedback(id, 'dislike')}
-            >
-              <ThumbsDown className="h-3 w-3" />
-            </Button>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-6 w-6',
+                  currentFeedback === 'like' && 'text-green-500 bg-green-500/10'
+                )}
+                onClick={() => onFeedback(id, 'like')}
+                disabled={hasVoted || feedbackLoading}
+              >
+                <ThumbsUp className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-6 w-6',
+                  currentFeedback === 'dislike' && 'text-red-500 bg-red-500/10'
+                )}
+                onClick={() => onFeedback(id, 'dislike')}
+                disabled={hasVoted || feedbackLoading}
+              >
+                <ThumbsDown className="h-3 w-3" />
+              </Button>
+            </div>
+            {feedbackCounts && (
+              <div className="flex gap-2 text-xs text-muted-foreground">
+                <span className="flex items-center gap-0.5">
+                  <ThumbsUp className="h-3 w-3 text-green-500" />
+                  {feedbackCounts.positive}
+                </span>
+                <span className="flex items-center gap-0.5">
+                  <ThumbsDown className="h-3 w-3 text-red-500" />
+                  {feedbackCounts.negative}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
