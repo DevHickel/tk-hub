@@ -225,7 +225,7 @@ export function ChatSidebar({
   return (
     <div className="h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
       <div className="p-4 border-b border-sidebar-border">
-        <Logo size="md" />
+        <Logo size="md" showText={true} />
       </div>
 
       <div className="p-3">
