@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,14 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -39,7 +41,53 @@ export default function BugReport() {
   const [isHoveringUpload, setIsHoveringUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filter states
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterName, setFilterName] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
   const canManageReports = profile?.role === 'admin' || appRoles.includes('admin') || appRoles.includes('tk_master');
+
+  // Filtered reports
+  const filteredReports = useMemo(() => {
+    return reports.filter(report => {
+      // Status filter
+      if (filterStatus !== 'all' && report.status !== filterStatus) {
+        return false;
+      }
+      
+      // Name filter
+      if (filterName && !report.user_name?.toLowerCase().includes(filterName.toLowerCase())) {
+        return false;
+      }
+      
+      // Date filter
+      if (filterDateFrom || filterDateTo) {
+        if (!report.created_at) return false;
+        const reportDate = parseISO(report.created_at);
+        
+        if (filterDateFrom && filterDateTo) {
+          if (!isWithinInterval(reportDate, {
+            start: startOfDay(parseISO(filterDateFrom)),
+            end: endOfDay(parseISO(filterDateTo))
+          })) {
+            return false;
+          }
+        } else if (filterDateFrom) {
+          if (reportDate < startOfDay(parseISO(filterDateFrom))) {
+            return false;
+          }
+        } else if (filterDateTo) {
+          if (reportDate > endOfDay(parseISO(filterDateTo))) {
+            return false;
+          }
+        }
+      }
+      
+      return true;
+    });
+  }, [reports, filterStatus, filterName, filterDateFrom, filterDateTo]);
 
   const fetchReports = async () => {
     if (!canManageReports) return;
@@ -256,12 +304,73 @@ export default function BugReport() {
                     Visualize todos os reports de bugs enviados pelos usuários
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="flex-1 min-w-[200px]">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
+                      <Select value={filterStatus} onValueChange={setFilterStatus}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Todos" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="pending">Pendente</SelectItem>
+                          <SelectItem value="fixed">Corrigido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1 min-w-[200px]">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Nome do usuário</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar por nome..." 
+                          value={filterName}
+                          onChange={(e) => setFilterName(e.target.value)}
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Data inicial</Label>
+                      <Input 
+                        type="date" 
+                        value={filterDateFrom}
+                        onChange={(e) => setFilterDateFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[150px]">
+                      <Label className="text-xs text-muted-foreground mb-1 block">Data final</Label>
+                      <Input 
+                        type="date" 
+                        value={filterDateTo}
+                        onChange={(e) => setFilterDateTo(e.target.value)}
+                      />
+                    </div>
+                    {(filterStatus !== 'all' || filterName || filterDateFrom || filterDateTo) && (
+                      <div className="flex items-end">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setFilterStatus('all');
+                            setFilterName('');
+                            setFilterDateFrom('');
+                            setFilterDateTo('');
+                          }}
+                        >
+                          Limpar filtros
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   {isLoadingReports ? (
                     <div className="flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     </div>
-                  ) : reports.length === 0 ? (
+                  ) : filteredReports.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">
                       Nenhum report encontrado
                     </p>
@@ -278,7 +387,7 @@ export default function BugReport() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {reports.map((report) => (
+                        {filteredReports.map((report) => (
                           <TableRow key={report.id}>
                             <TableCell className="whitespace-nowrap">
                               {report.created_at 
