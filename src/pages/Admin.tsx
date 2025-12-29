@@ -49,14 +49,16 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
+  const { isAdmin } = useAuth();
+
   useEffect(() => {
-    if (profile?.role !== 'admin') {
+    if (!isAdmin) {
       toast.error('Acesso negado');
       navigate('/chat');
       return;
     }
     fetchData();
-  }, [profile, navigate]);
+  }, [isAdmin, navigate]);
 
   const fetchData = async () => {
     setIsLoading(true);

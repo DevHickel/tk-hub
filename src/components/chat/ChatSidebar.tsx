@@ -54,10 +54,8 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
-
-  const isAdmin = profile?.role === 'admin';
 
   const pinnedConversations = conversations.filter(c => c.is_pinned);
   const unpinnedConversations = conversations.filter(c => !c.is_pinned);
