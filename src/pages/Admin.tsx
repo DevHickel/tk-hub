@@ -147,17 +147,32 @@ export default function Admin() {
   };
 
   const fetchInvites = async () => {
-    const { data, error } = await supabase
+    // Fetch invites
+    const { data: invitesData, error: invitesError } = await supabase
       .from('invites')
       .select('*')
-      .neq('status', 'accepted') // Não mostrar convites aceitos
       .order('created_at', { ascending: false });
     
-    if (error) {
-      console.error('Error fetching invites:', error);
+    if (invitesError) {
+      console.error('Error fetching invites:', invitesError);
       return;
     }
-    setInvites(data || []);
+
+    // Fetch all registered users emails to check if invite was used
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('email');
+    
+    const registeredEmails = new Set(profilesData?.map(p => p.email?.toLowerCase()) || []);
+
+    // Filter out invites where user has already registered
+    const filteredInvites = (invitesData || []).filter(invite => {
+      const isUserRegistered = registeredEmails.has(invite.email.toLowerCase());
+      // If user registered, mark as accepted and don't show
+      return !isUserRegistered;
+    });
+
+    setInvites(filteredInvites);
   };
 
   const sendInvite = async () => {
@@ -240,15 +255,48 @@ export default function Admin() {
   };
 
   const updateUserRole = async (userId: string, newRole: 'admin' | 'user') => {
-    const { error } = await supabase
+    // Update profile role
+    const { error: profileError } = await supabase
       .from('profiles')
       .update({ role: newRole })
       .eq('id', userId);
     
-    if (error) {
+    if (profileError) {
       toast.error('Erro ao atualizar cargo');
       return;
     }
+
+    // Also update user_roles table
+    const appRole = newRole === 'admin' ? 'admin' : 'user';
+    
+    // First try to update existing role
+    const { data: existingRole } = await supabase
+      .from('user_roles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (existingRole) {
+      // Update existing role
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .update({ role: appRole })
+        .eq('user_id', userId);
+      
+      if (roleError) {
+        console.error('Error updating user_roles:', roleError);
+      }
+    } else {
+      // Insert new role if doesn't exist
+      const { error: insertError } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role: appRole });
+      
+      if (insertError) {
+        console.error('Error inserting user_role:', insertError);
+      }
+    }
+
     toast.success('Cargo atualizado');
     fetchUsers();
   };
@@ -581,16 +629,14 @@ export default function Admin() {
                                     <Copy className="h-4 w-4" />
                                   </Button>
                                 )}
-                                {(isExpired || invite.status !== 'pending') && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => deleteInvite(invite.id)}
-                                    title="Excluir convite"
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteInvite(invite.id)}
+                                  title="Excluir convite"
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
