@@ -218,7 +218,7 @@ export default function BugReport() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-3xl">
+      <main className="container mx-auto px-4 py-6 max-w-6xl">
         {canManageReports ? (
           <Tabs defaultValue="send" className="space-y-6" onValueChange={(v) => v === 'manage' && fetchReports()}>
             <TabsList className="grid w-full max-w-md grid-cols-2">
