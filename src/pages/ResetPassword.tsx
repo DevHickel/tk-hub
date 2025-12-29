@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Key, Check, X } from 'lucide-react';
+import { Eye, EyeOff, Key, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Session } from '@supabase/supabase-js';
 
 interface PasswordRequirement {
   label: string;
@@ -29,8 +30,33 @@ export default function ResetPassword() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Listen for auth state changes (handles the recovery token from URL)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setCheckingSession(false);
+        
+        if (event === 'PASSWORD_RECOVERY') {
+          // User arrived via password recovery link
+          setSession(session);
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setCheckingSession(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const passwordValidation = useMemo(() => {
     return passwordRequirements.map(req => ({
@@ -45,6 +71,15 @@ export default function ResetPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!session) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Sessão não encontrada. Por favor, use o link de recuperação novamente.',
+      });
+      return;
+    }
+
     if (password !== confirmPassword) {
       toast({
         variant: 'destructive',
@@ -80,11 +115,51 @@ export default function ResetPassword() {
         title: 'Senha atualizada!',
         description: 'Sua senha foi alterada com sucesso.',
       });
+      // Sign out to force re-login with new password
+      await supabase.auth.signOut();
       navigate('/login');
     }
 
     setLoading(false);
   };
+
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show error if no session
+  if (!session) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Card className="w-full max-w-md animate-fade-in">
+            <CardHeader className="text-center space-y-4">
+              <div className="flex justify-center">
+                <Logo size="lg" />
+              </div>
+              <CardTitle className="text-2xl">Link Expirado</CardTitle>
+              <CardDescription>
+                O link de recuperação de senha expirou ou é inválido. Por favor, solicite um novo link.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" onClick={() => navigate('/forgot-password')}>
+                Solicitar novo link
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
