@@ -94,10 +94,61 @@ export default function Chat() {
       return;
     }
 
-    setMessages(data.map(m => ({
+    // Build messages array and load feedbacks
+    const messagesData = data.map(m => ({
       ...m,
       role: m.role as 'user' | 'assistant'
-    })));
+    }));
+
+    // Load existing feedbacks for AI messages
+    const messagesWithFeedback = await loadFeedbacksForMessages(messagesData);
+    setMessages(messagesWithFeedback);
+  };
+
+  const loadFeedbacksForMessages = async (messagesData: Message[]): Promise<Message[]> => {
+    const result: Message[] = [];
+    
+    for (let i = 0; i < messagesData.length; i++) {
+      const message = messagesData[i];
+      
+      if (message.role === 'assistant') {
+        // Find previous user message
+        let userMessage = '';
+        for (let j = i - 1; j >= 0; j--) {
+          if (messagesData[j].role === 'user') {
+            userMessage = messagesData[j].content;
+            break;
+          }
+        }
+        
+        // Fetch feedback from knowledge_feedback table
+        const { data: feedbackData } = await supabase
+          .from('knowledge_feedback')
+          .select('votos_positivos, votos_negativos')
+          .eq('pergunta_original', userMessage)
+          .eq('resposta_ia', message.content)
+          .maybeSingle();
+        
+        let feedback: 'like' | 'dislike' | null = null;
+        let feedbackCounts = { positive: 0, negative: 0 };
+        
+        if (feedbackData) {
+          if (feedbackData.votos_positivos === 1) {
+            feedback = 'like';
+            feedbackCounts.positive = 1;
+          } else if (feedbackData.votos_negativos === 1) {
+            feedback = 'dislike';
+            feedbackCounts.negative = 1;
+          }
+        }
+        
+        result.push({ ...message, feedback, feedbackCounts });
+      } else {
+        result.push(message);
+      }
+    }
+    
+    return result;
   };
 
   const handleNewConversation = () => {
@@ -309,7 +360,6 @@ export default function Chat() {
     if (messageIndex === -1) return;
 
     const aiMessage = messages[messageIndex];
-    const previousFeedback = aiMessage.feedback;
     
     // Find the previous user message
     let userMessage = '';
@@ -325,66 +375,65 @@ export default function Chat() {
       m.id === messageId ? { ...m, feedbackLoading: true } : m
     ));
 
+    const votosPositivos = feedback === 'like' ? 1 : 0;
+    const votosNegativos = feedback === 'dislike' ? 1 : 0;
+
     try {
-      // Call feedback via edge function to avoid CORS
-      const response = await fetch('https://bzhfeqdwxdmvydrdsdno.supabase.co/functions/v1/send-feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6aGZlcWR3eGRtdnlkcmRzZG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxMDM3MTAsImV4cCI6MjA3NDY3OTcxMH0.pyM23Q-N_GCWCaktq6CfsqZXZjea8mD0qfU4iwe-odU`,
-        },
-        body: JSON.stringify({
-          pergunta_original: userMessage,
-          resposta_ia: aiMessage.content,
-          voto: feedback === 'like' ? 'positivo' : 'negativo',
-        }),
-      });
+      // Check if feedback already exists for this pair
+      const { data: existingFeedback } = await supabase
+        .from('knowledge_feedback')
+        .select('id')
+        .eq('pergunta_original', userMessage)
+        .eq('resposta_ia', aiMessage.content)
+        .maybeSingle();
 
-      if (response.ok) {
-        // Update message with feedback and adjust counters
-        setMessages(prev => prev.map(m => {
-          if (m.id === messageId) {
-            const currentCounts = m.feedbackCounts || { positive: 0, negative: 0 };
-            
-            // Calculate new counts considering vote change
-            let newPositive = currentCounts.positive;
-            let newNegative = currentCounts.negative;
-            
-            // If changing vote, decrement the old vote
-            if (previousFeedback === 'like') {
-              newPositive = Math.max(0, newPositive - 1);
-            } else if (previousFeedback === 'dislike') {
-              newNegative = Math.max(0, newNegative - 1);
-            }
-            
-            // Increment new vote
-            if (feedback === 'like') {
-              newPositive += 1;
-            } else {
-              newNegative += 1;
-            }
-            
-            return { 
-              ...m, 
-              feedback,
-              feedbackLoading: false,
-              feedbackCounts: {
-                positive: newPositive,
-                negative: newNegative,
-              }
-            };
-          }
-          return m;
-        }));
+      if (existingFeedback) {
+        // Update existing record
+        const { error } = await supabase
+          .from('knowledge_feedback')
+          .update({
+            votos_positivos: votosPositivos,
+            votos_negativos: votosNegativos,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingFeedback.id);
 
-        toast({
-          title: 'Obrigado pelo feedback!',
-        });
+        if (error) throw error;
       } else {
-        throw new Error('Webhook response not ok');
+        // Insert new record
+        const { error } = await supabase
+          .from('knowledge_feedback')
+          .insert({
+            pergunta_original: userMessage,
+            resposta_ia: aiMessage.content,
+            votos_positivos: votosPositivos,
+            votos_negativos: votosNegativos,
+          });
+
+        if (error) throw error;
       }
+
+      // Update message state
+      setMessages(prev => prev.map(m => {
+        if (m.id === messageId) {
+          return { 
+            ...m, 
+            feedback,
+            feedbackLoading: false,
+            feedbackCounts: {
+              positive: votosPositivos,
+              negative: votosNegativos,
+            }
+          };
+        }
+        return m;
+      }));
+
+      toast({
+        title: 'Obrigado pelo feedback!',
+      });
     } catch (error) {
-      console.error('Error sending feedback:', error);
+      console.error('Error saving feedback:', error);
       
       // Reset loading state
       setMessages(prev => prev.map(m => 
@@ -394,7 +443,7 @@ export default function Chat() {
       toast({
         variant: 'destructive',
         title: 'Erro',
-        description: 'Não foi possível enviar o feedback.',
+        description: 'Não foi possível salvar o feedback.',
       });
     }
   };
