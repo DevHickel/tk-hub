@@ -537,51 +537,60 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUsers.map((userItem) => (
-                      <TableRow key={userItem.id}>
-                        <TableCell className="font-medium">{userItem.full_name || '-'}</TableCell>
-                        <TableCell>{userItem.email || '-'}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={userItem.app_role}
-                            onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}
-                            disabled={userItem.id === profile?.id || !isTkMaster}
-                          >
-                            <SelectTrigger className="w-32">
-                              <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {isTkMaster && <SelectItem value="tk_master">TK Owner</SelectItem>}
-                              <SelectItem value="admin">Admin</SelectItem>
-                              <SelectItem value="user">Usuário</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {messageCountByUserId[userItem.id] || 0}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {userItem.last_sign_in_at 
-                            ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                            : '-'}
-                        </TableCell>
-                        {isTkMaster && (
+                    {filteredUsers.map((userItem) => {
+                      // TK Masters can edit everyone except themselves
+                      // Admins can only edit users with 'user' role (not other admins or tk_masters)
+                      const isOwnProfile = userItem.id === profile?.id;
+                      const canEditRole = isTkMaster 
+                        ? !isOwnProfile 
+                        : (userItem.app_role === 'user' && !isOwnProfile);
+                      
+                      return (
+                        <TableRow key={userItem.id}>
+                          <TableCell className="font-medium">{userItem.full_name || '-'}</TableCell>
+                          <TableCell>{userItem.email || '-'}</TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteUser(userItem.id)}
-                              disabled={userItem.id === profile?.id}
-                              title="Excluir usuário"
+                            <Select
+                              value={userItem.app_role}
+                              onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}
+                              disabled={!canEditRole}
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                              <SelectTrigger className="w-32">
+                                <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {isTkMaster && <SelectItem value="tk_master">TK Owner</SelectItem>}
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="user">Usuário</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {messageCountByUserId[userItem.id] || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {userItem.last_sign_in_at 
+                              ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                              : '-'}
+                          </TableCell>
+                          {isTkMaster && (
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => deleteUser(userItem.id)}
+                                disabled={userItem.id === profile?.id}
+                                title="Excluir usuário"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
