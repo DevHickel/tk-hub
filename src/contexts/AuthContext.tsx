@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+type AppRole = 'admin' | 'user' | 'tk_master';
+
 interface Profile {
   id: string;
   email: string | null;
@@ -16,6 +18,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  appRoles: AppRole[];
+  isAdmin: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -28,7 +32,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [appRoles, setAppRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const isAdmin = appRoles.includes('admin') || appRoles.includes('tk_master');
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -44,19 +51,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data as Profile;
   };
 
+  const fetchAppRoles = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error fetching app roles:', error);
+      return [];
+    }
+    return (data || []).map(r => r.role as AppRole);
+  };
+
   const refreshProfile = async () => {
     if (user) {
-      const profileData = await fetchProfile(user.id);
+      const [profileData, roles] = await Promise.all([
+        fetchProfile(user.id),
+        fetchAppRoles(user.id)
+      ]);
       setProfile(profileData);
+      setAppRoles(roles);
     }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id).then(setProfile);
+        const [profileData, roles] = await Promise.all([
+          fetchProfile(session.user.id),
+          fetchAppRoles(session.user.id)
+        ]);
+        setProfile(profileData);
+        setAppRoles(roles);
       }
       setLoading(false);
     });
@@ -66,10 +95,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          const profileData = await fetchProfile(session.user.id);
+          const [profileData, roles] = await Promise.all([
+            fetchProfile(session.user.id),
+            fetchAppRoles(session.user.id)
+          ]);
           setProfile(profileData);
+          setAppRoles(roles);
         } else {
           setProfile(null);
+          setAppRoles([]);
         }
         setLoading(false);
       }
@@ -91,10 +125,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setProfile(null);
+    setAppRoles([]);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, appRoles, isAdmin, loading, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
