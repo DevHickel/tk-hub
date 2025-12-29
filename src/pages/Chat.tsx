@@ -309,6 +309,7 @@ export default function Chat() {
     if (messageIndex === -1) return;
 
     const aiMessage = messages[messageIndex];
+    const previousFeedback = aiMessage.feedback;
     
     // Find the previous user message
     let userMessage = '';
@@ -339,17 +340,36 @@ export default function Chat() {
       });
 
       if (response.ok) {
-        // Update message with feedback and increment counter
+        // Update message with feedback and adjust counters
         setMessages(prev => prev.map(m => {
           if (m.id === messageId) {
             const currentCounts = m.feedbackCounts || { positive: 0, negative: 0 };
+            
+            // Calculate new counts considering vote change
+            let newPositive = currentCounts.positive;
+            let newNegative = currentCounts.negative;
+            
+            // If changing vote, decrement the old vote
+            if (previousFeedback === 'like') {
+              newPositive = Math.max(0, newPositive - 1);
+            } else if (previousFeedback === 'dislike') {
+              newNegative = Math.max(0, newNegative - 1);
+            }
+            
+            // Increment new vote
+            if (feedback === 'like') {
+              newPositive += 1;
+            } else {
+              newNegative += 1;
+            }
+            
             return { 
               ...m, 
               feedback,
               feedbackLoading: false,
               feedbackCounts: {
-                positive: currentCounts.positive + (feedback === 'like' ? 1 : 0),
-                negative: currentCounts.negative + (feedback === 'dislike' ? 1 : 0),
+                positive: newPositive,
+                negative: newNegative,
               }
             };
           }

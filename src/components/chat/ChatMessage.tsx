@@ -29,7 +29,6 @@ export function ChatMessage({
   previousUserMessage
 }: ChatMessageProps) {
   const isUser = role === 'user';
-  const hasVoted = currentFeedback !== null && currentFeedback !== undefined;
 
   return (
     <div className={cn(
@@ -79,7 +78,7 @@ export function ChatMessage({
                   currentFeedback === 'like' && 'text-green-500 bg-green-500/10'
                 )}
                 onClick={() => onFeedback(id, 'like')}
-                disabled={hasVoted || feedbackLoading}
+                disabled={currentFeedback === 'like' || feedbackLoading}
               >
                 <ThumbsUp className="h-3 w-3" />
               </Button>
@@ -91,7 +90,7 @@ export function ChatMessage({
                   currentFeedback === 'dislike' && 'text-red-500 bg-red-500/10'
                 )}
                 onClick={() => onFeedback(id, 'dislike')}
-                disabled={hasVoted || feedbackLoading}
+                disabled={currentFeedback === 'dislike' || feedbackLoading}
               >
                 <ThumbsDown className="h-3 w-3" />
               </Button>
