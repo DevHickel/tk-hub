@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -22,6 +23,8 @@ interface BugReportData {
   screenshot_url: string | null;
   created_at: string | null;
   user_id: string | null;
+  status: string;
+  user_name?: string;
 }
 
 export default function BugReport() {
@@ -49,10 +52,55 @@ export default function BugReport() {
     
     if (error) {
       toast.error('Erro ao carregar reports');
-    } else {
-      setReports(data || []);
+      setIsLoadingReports(false);
+      return;
     }
+
+    // Fetch user profiles for each report
+    const userIds = [...new Set((data || []).map(r => r.user_id).filter(Boolean))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', userIds);
+
+    const profileMap = new Map(profiles?.map(p => [p.id, p.full_name || p.email || 'Usuário desconhecido']) || []);
+    
+    const reportsWithNames = (data || []).map(report => ({
+      ...report,
+      user_name: report.user_id ? profileMap.get(report.user_id) || 'Usuário desconhecido' : 'Usuário desconhecido'
+    }));
+
+    setReports(reportsWithNames);
     setIsLoadingReports(false);
+  };
+
+  const toggleStatus = async (reportId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'pending' ? 'fixed' : 'pending';
+    const { error } = await supabase
+      .from('bug_reports')
+      .update({ status: newStatus })
+      .eq('id', reportId);
+    
+    if (error) {
+      toast.error('Erro ao atualizar status');
+    } else {
+      setReports(reports.map(r => r.id === reportId ? { ...r, status: newStatus } : r));
+      toast.success(newStatus === 'fixed' ? 'Marcado como corrigido' : 'Marcado como pendente');
+    }
+  };
+
+  const deleteReport = async (reportId: string) => {
+    const { error } = await supabase
+      .from('bug_reports')
+      .delete()
+      .eq('id', reportId);
+    
+    if (error) {
+      toast.error('Erro ao excluir report');
+    } else {
+      setReports(reports.filter(r => r.id !== reportId));
+      toast.success('Report excluído');
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -222,8 +270,11 @@ export default function BugReport() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Data</TableHead>
+                          <TableHead>Usuário</TableHead>
                           <TableHead>Descrição</TableHead>
                           <TableHead>Imagem</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -233,6 +284,9 @@ export default function BugReport() {
                               {report.created_at 
                                 ? format(new Date(report.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
                                 : '-'}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {report.user_name || 'Usuário desconhecido'}
                             </TableCell>
                             <TableCell className="max-w-md">
                               {report.description}
@@ -251,6 +305,29 @@ export default function BugReport() {
                               ) : (
                                 <span className="text-muted-foreground">-</span>
                               )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={report.status === 'fixed' ? 'default' : 'secondary'}
+                                className="cursor-pointer"
+                                onClick={() => toggleStatus(report.id, report.status)}
+                              >
+                                {report.status === 'fixed' ? (
+                                  <><CheckCircle className="h-3 w-3 mr-1" /> Corrigido</>
+                                ) : (
+                                  <><Clock className="h-3 w-3 mr-1" /> Pendente</>
+                                )}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => deleteReport(report.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
