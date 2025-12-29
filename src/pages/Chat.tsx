@@ -326,11 +326,12 @@ export default function Chat() {
     ));
 
     try {
-      // Call feedback webhook
-      const response = await fetch('https://n8n.vetorix.com.br/webhook-test/feedback', {
+      // Call feedback via edge function to avoid CORS
+      const response = await fetch('https://bzhfeqdwxdmvydrdsdno.supabase.co/functions/v1/send-feedback', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6aGZlcWR3eGRtdnlkcmRzZG5vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTkxMDM3MTAsImV4cCI6MjA3NDY3OTcxMH0.pyM23Q-N_GCWCaktq6CfsqZXZjea8mD0qfU4iwe-odU`,
         },
         body: JSON.stringify({
           pergunta_original: userMessage,
