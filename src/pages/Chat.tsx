@@ -231,10 +231,10 @@ export default function Chat() {
     // Increment user points
     await supabase.rpc('increment_user_points', { p_user_id: user.id, p_points: 1 });
 
-    // Log activity
+    // Log activity - usar 'message_sent' para o contador funcionar
     await supabase.from('activity_logs').insert({
       user_id: user.id,
-      action: 'mensagem no chat',
+      action: 'message_sent',
       details: { conversation_id: conversationId }
     });
 

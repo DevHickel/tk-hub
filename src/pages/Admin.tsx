@@ -366,7 +366,15 @@ export default function Admin() {
     doc.name.toLowerCase().includes(docSearchTerm.toLowerCase())
   );
 
-  // Contar mensagens por usuário
+  // Contar mensagens por usuário (usando user_id)
+  const messageCountByUserId = activityLogs.reduce((acc, log) => {
+    if (log.action === 'message_sent') {
+      acc[log.user_id] = (acc[log.user_id] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Contar mensagens por nome para exibição nos logs
   const messageCountByUser = activityLogs.reduce((acc, log) => {
     if (log.action === 'message_sent') {
       const userName = log.profiles?.full_name || log.profiles?.email || log.user_id;
@@ -450,6 +458,7 @@ export default function Admin() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Cargo</TableHead>
+                      <TableHead>Mensagens</TableHead>
                       <TableHead>Último Acesso</TableHead>
                       {isTkMaster && <TableHead className="w-16">Ações</TableHead>}
                     </TableRow>
@@ -473,6 +482,11 @@ export default function Admin() {
                               <SelectItem value="user">Usuário</SelectItem>
                             </SelectContent>
                           </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {messageCountByUserId[userItem.id] || 0}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           {userItem.last_sign_in_at 

@@ -141,7 +141,7 @@ export default function Register() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -160,6 +160,14 @@ export default function Register() {
       });
       setLoading(false);
       return;
+    }
+
+    // Update profile with full_name (display name)
+    if (signUpData.user) {
+      await supabase
+        .from('profiles')
+        .update({ full_name: fullName })
+        .eq('id', signUpData.user.id);
     }
 
     // Mark invite as accepted
