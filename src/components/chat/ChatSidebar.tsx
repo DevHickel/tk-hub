@@ -21,6 +21,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Conversation {
   id: string;
@@ -57,12 +67,21 @@ export function ChatSidebar({
   const { profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const pinnedConversations = conversations.filter(c => c.is_pinned);
   const unpinnedConversations = conversations.filter(c => !c.is_pinned);
 
   const handleStartEdit = (conv: Conversation) => {
     setEditingId(conv.id);
     setEditTitle(conv.title);
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteConfirmId) {
+      onDeleteConversation(deleteConfirmId);
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleSaveEdit = (id: string) => {
@@ -162,7 +181,7 @@ export function ChatSidebar({
                 className="h-6 w-6 text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDeleteConversation(conv.id);
+                  setDeleteConfirmId(conv.id);
                 }}
               >
                 <Trash2 className="h-3 w-3" />
@@ -226,7 +245,8 @@ export function ChatSidebar({
   }
 
   return (
-    <div className="h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+    <>
+      <div className="h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
       <div className="p-4 border-b border-sidebar-border">
         <Logo size="md" showText={true} />
       </div>
@@ -300,5 +320,23 @@ export function ChatSidebar({
         <ChevronLeft className="h-3 w-3" />
       </Button>
     </div>
+
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conversa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A conversa será permanentemente removida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
