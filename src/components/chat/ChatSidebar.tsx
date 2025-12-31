@@ -150,7 +150,7 @@ export function ChatSidebar({
         ) : (
           <>
             <span className="flex-1 min-w-0 truncate text-sm">
-              {conv.title.length > 15 ? `${conv.title.substring(0, 15)}...` : conv.title}
+              {conv.title.length > 16 ? conv.title.substring(0, 16) : conv.title}
             </span>
             <div className="flex items-center gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
               <Button
