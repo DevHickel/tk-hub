@@ -362,6 +362,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      buscar_melhor_conteudo: {
+        Args: {
+          match_threshold: number
+          peso_voto: number
+          query_embedding: string
+        }
+        Returns: {
+          conteudo: string
+          origem: string
+          score_final: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

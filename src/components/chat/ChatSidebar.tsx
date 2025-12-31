@@ -92,10 +92,11 @@ export function ChatSidebar({
         <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
         
         {isEditing ? (
-          <div className="flex-1 flex items-center gap-1">
+          <div className="flex-1 flex items-center gap-1 min-w-0">
             <Input
               value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
+              onChange={(e) => setEditTitle(e.target.value.substring(0, 30))}
+              maxLength={30}
               className="h-6 text-sm"
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
@@ -129,8 +130,10 @@ export function ChatSidebar({
           </div>
         ) : (
           <>
-            <span className="flex-1 truncate text-sm">{conv.title}</span>
-            <div className="hidden group-hover:flex items-center gap-0.5">
+            <span className="flex-1 min-w-0 truncate text-sm">
+              {conv.title.length > 18 ? `${conv.title.substring(0, 18)}...` : conv.title}
+            </span>
+            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
               <Button
                 size="icon"
                 variant="ghost"
