@@ -133,7 +133,7 @@ export function ChatSidebar({
             <span className="flex-1 min-w-0 truncate text-sm">
               {conv.title.length > 18 ? `${conv.title.substring(0, 18)}...` : conv.title}
             </span>
-            <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+            <div className="flex md:hidden md:group-hover:flex items-center gap-0.5 shrink-0">
               <Button
                 size="icon"
                 variant="ghost"
