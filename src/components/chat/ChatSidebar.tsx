@@ -195,7 +195,7 @@ export function ChatSidebar({
 
   if (collapsed) {
     return (
-      <div className="h-full w-16 bg-sidebar border-r border-sidebar-border flex flex-col items-center py-4">
+      <div className="h-full w-16 bg-sidebar border-r border-sidebar-border flex flex-col items-center py-4 transition-all duration-300 ease-in-out">
         <Logo size="sm" showText={false} className="mb-4" />
         
         <Button
@@ -246,7 +246,7 @@ export function ChatSidebar({
 
   return (
     <>
-      <div className="h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
+      <div className="h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 ease-in-out">
       <div className="p-4 border-b border-sidebar-border">
         <Logo size="md" showText={true} />
       </div>
