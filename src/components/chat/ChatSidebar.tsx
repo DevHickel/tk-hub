@@ -156,7 +156,7 @@ export function ChatSidebar({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-6 w-6 hover:bg-muted hover:scale-110 transition-all"
                 onClick={(e) => {
                   e.stopPropagation();
                   onPinConversation(conv.id, !conv.is_pinned);
@@ -167,7 +167,7 @@ export function ChatSidebar({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6"
+                className="h-6 w-6 hover:bg-muted hover:scale-110 transition-all"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleStartEdit(conv);
@@ -178,7 +178,7 @@ export function ChatSidebar({
               <Button
                 size="icon"
                 variant="ghost"
-                className="h-6 w-6 text-destructive"
+                className="h-6 w-6 text-destructive hover:bg-destructive/20 hover:scale-110 transition-all"
                 onClick={(e) => {
                   e.stopPropagation();
                   setDeleteConfirmId(conv.id);
