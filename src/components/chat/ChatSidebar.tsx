@@ -157,7 +157,7 @@ export function ChatSidebar({
         ) : (
           <>
             <span className="flex-1 min-w-0 truncate text-sm">
-              {conv.title.length > 25 ? `${conv.title.substring(0, 25)}...` : conv.title}
+              {conv.title.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
