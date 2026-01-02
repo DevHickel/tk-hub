@@ -157,14 +157,14 @@ export function ChatSidebar({
         ) : (
           <>
             <span className="flex-1 min-w-0 truncate text-sm">
-              {conv.title.length > 30 ? `${conv.title.substring(0, 30)}...` : conv.title}
+              {conv.title.length > 25 ? `${conv.title.substring(0, 25)}...` : conv.title}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-6 w-6 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-muted"
+                  className="h-6 w-6 shrink-0 hover:bg-muted"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
