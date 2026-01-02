@@ -13,8 +13,15 @@ import {
   Settings,
   Shield,
   Bug,
-  LogOut
+  LogOut,
+  MoreVertical
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -150,43 +157,49 @@ export function ChatSidebar({
         ) : (
           <>
             <span className="flex-1 min-w-0 truncate text-sm">
-              {conv.title.length > 14 ? `${conv.title.substring(0, 14)}...` : conv.title}
+              {conv.title.length > 30 ? `${conv.title.substring(0, 30)}...` : conv.title}
             </span>
-            <div className="flex items-center gap-0.5 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-muted hover:scale-110 transition-all"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPinConversation(conv.id, !conv.is_pinned);
-                }}
-              >
-                <Pin className={cn('h-3 w-3', conv.is_pinned && 'fill-current')} />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 hover:bg-muted hover:scale-110 transition-all"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleStartEdit(conv);
-                }}
-              >
-                <Edit2 className="h-3 w-3" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6 text-destructive hover:bg-destructive/20 hover:scale-110 transition-all"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteConfirmId(conv.id);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:bg-muted"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPinConversation(conv.id, !conv.is_pinned);
+                  }}
+                >
+                  <Pin className={cn('h-4 w-4 mr-2', conv.is_pinned && 'fill-current')} />
+                  {conv.is_pinned ? 'Desafixar' : 'Fixar'}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStartEdit(conv);
+                  }}
+                >
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Renomear
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConfirmId(conv.id);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
       </div>
