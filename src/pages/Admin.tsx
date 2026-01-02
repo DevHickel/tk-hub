@@ -703,7 +703,7 @@ export default function Admin() {
                       <TableHead>Data/Hora</TableHead>
                       <TableHead>Usuário</TableHead>
                       <TableHead>Ação</TableHead>
-                      <TableHead>Contador</TableHead>
+                      <TableHead>Pontuação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
