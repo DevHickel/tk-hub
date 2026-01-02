@@ -22,6 +22,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -156,9 +161,16 @@ export function ChatSidebar({
           </div>
         ) : (
           <>
-            <span className="flex-1 min-w-0 truncate text-sm">
-              {conv.title.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
-            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex-1 min-w-0 truncate text-sm">
+                  {conv.title.length > 20 ? `${conv.title.substring(0, 20)}...` : conv.title}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="max-w-xs">
+                {conv.title}
+              </TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                 <Button
