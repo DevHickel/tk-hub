@@ -374,6 +374,18 @@ export type Database = {
           score_final: number
         }[]
       }
+      buscar_melhor_correspondencia: {
+        Args: {
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          id: string
+          score_final: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
