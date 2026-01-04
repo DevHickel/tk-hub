@@ -436,6 +436,7 @@ export default function Chat() {
 
       toast({
         title: 'Obrigado pelo feedback!',
+        duration: 2000,
       });
     } catch (error) {
       console.error('Error saving feedback:', error);
