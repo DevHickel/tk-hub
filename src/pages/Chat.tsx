@@ -133,12 +133,17 @@ export default function Chat() {
         let feedbackCounts = { positive: 0, negative: 0 };
         
         if (feedbackData) {
-          if (feedbackData.votos_positivos === 1) {
+          // Atribuir valores reais do banco de dados
+          feedbackCounts = {
+            positive: feedbackData.votos_positivos || 0,
+            negative: feedbackData.votos_negativos || 0
+          };
+          
+          // Determinar qual botão destacar (baseado em votos existentes)
+          if (feedbackData.votos_positivos > 0) {
             feedback = 'like';
-            feedbackCounts.positive = 1;
-          } else if (feedbackData.votos_negativos === 1) {
+          } else if (feedbackData.votos_negativos > 0) {
             feedback = 'dislike';
-            feedbackCounts.negative = 1;
           }
         }
         
