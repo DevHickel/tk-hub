@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import tkzinhoAvatar from '@/assets/tkzinho.jpg';
 
 interface Message {
   id: string;
@@ -487,9 +488,11 @@ export default function Chat() {
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                <div className="h-16 w-16 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-bold mb-4">
-                  TK
-                </div>
+                <img 
+                  src={tkzinhoAvatar} 
+                  alt="Tkzinho" 
+                  className="h-16 w-16 rounded-full object-cover mb-4"
+                />
                 <h2 className="text-2xl font-semibold mb-2">Olá! Eu sou o Tkzinho</h2>
                 <p className="text-muted-foreground max-w-md">
                   Estou aqui para ajudar você. Digite sua mensagem abaixo para começar uma conversa.

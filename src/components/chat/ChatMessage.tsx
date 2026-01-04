@@ -2,6 +2,7 @@ import { ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import tkzinhoAvatar from '@/assets/tkzinho.jpg';
 
 interface ChatMessageProps {
   id: string;
@@ -44,9 +45,7 @@ export function ChatMessage({
             </AvatarFallback>
           </>
         ) : (
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs font-bold">
-            TK
-          </AvatarFallback>
+          <AvatarImage src={tkzinhoAvatar} alt="Tkzinho" className="object-cover" />
         )}
       </Avatar>
 
