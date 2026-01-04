@@ -299,7 +299,7 @@ export default function Chat() {
 
     // Call n8n webhook
     try {
-      const response = await fetch('https://n8n.vetorix.com.br/webhook-test/TkSolution', {
+      const response = await fetch('https://n8n.vetorix.com.br/webhook/TkSolution', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
