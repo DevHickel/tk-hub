@@ -320,7 +320,7 @@ export default function Admin() {
 
     try {
       // Call n8n webhook directly - all invite logic is handled by n8n
-      const response = await fetch('https://n8n.vetorix.com.br/webhook-test/convite-usuario', {
+      const response = await fetch('https://n8n.vetorix.com.br/webhook/convite-usuario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
