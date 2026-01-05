@@ -113,26 +113,45 @@ serve(async (req: Request): Promise<Response> => {
     // Build invite link using the configured SITE_URL
     const inviteLink = `${siteUrl}/register?token=${token}&email=${encodeURIComponent(email)}`;
 
-    // Use Supabase Auth generateLink to create a signup link WITHOUT creating the user
-    // This generates a magic link that can be sent via email
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink",
-      email: email,
-      options: {
-        redirectTo: inviteLink,
-        data: {
-          invite_token: token,
+    // Call the n8n webhook to send the invite email
+    const webhookUrl = "https://n8n.vetorix.com.br/webhook-test/convite-usuario";
+    
+    try {
+      const webhookResponse = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      },
-    });
+        body: JSON.stringify({
+          email,
+          invitedBy,
+          inviteLink,
+          token,
+          expiresAt: expiresAt.toISOString(),
+        }),
+      });
 
-    if (linkError) {
-      console.error("Error generating link:", linkError);
-      // Even if link generation fails, the invite was created
+      if (!webhookResponse.ok) {
+        console.error("Webhook call failed:", await webhookResponse.text());
+        // Still return success since invite was created, but warn about webhook
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            warning: "Convite criado, mas houve erro ao enviar email. Copie o link manualmente.",
+            inviteLink,
+            token 
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
+
+      console.log(`Webhook called successfully for ${email}`);
+    } catch (webhookError) {
+      console.error("Error calling webhook:", webhookError);
       return new Response(
         JSON.stringify({ 
           success: true, 
-          warning: "Convite criado! Copie o link manualmente para enviar ao usuário.",
+          warning: "Convite criado, mas houve erro ao enviar email. Copie o link manualmente.",
           inviteLink,
           token 
         }),
@@ -140,13 +159,13 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Invite created successfully for ${email}`);
+    console.log(`Invite created and email sent for ${email}`);
     console.log(`Invite link: ${inviteLink}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Convite criado com sucesso! Envie o link para o usuário.",
+        message: "Convite enviado com sucesso!",
         inviteLink,
         token 
       }),
