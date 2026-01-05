@@ -11,20 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Users, FileText, Activity, Search, Trash2, Upload, MessageSquare, Mail, Copy, UserPlus } from 'lucide-react';
+import { Users, FileText, Activity, Search, Trash2, Upload, MessageSquare, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
 
 type AppRole = 'admin' | 'user' | 'tk_master';
 
@@ -106,12 +98,113 @@ export default function Admin() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados para confirmação de exclusão
-  const [deleteUserConfirm, setDeleteUserConfirm] = useState<string | null>(null);
-  const [deleteInviteConfirm, setDeleteInviteConfirm] = useState<string | null>(null);
-  const [deleteDocConfirm, setDeleteDocConfirm] = useState<number[] | null>(null);
   const { isAdmin } = useAuth();
   const isTkMaster = appRoles.includes('tk_master');
+
+  // Hook para exclusão de usuário com cascade
+  const userDelete = useDeleteWithConfirmation<string>({
+    onDelete: async (userId) => {
+      // Apenas TK Masters podem deletar usuários
+      if (!isTkMaster) {
+        throw new Error('Sem permissão para excluir usuários');
+      }
+
+      // 1. Deletar bug_reports do usuário
+      await supabase
+        .from('bug_reports')
+        .delete()
+        .eq('user_id', userId);
+
+      // 2. Deletar mensagens das conversas do usuário
+      const { data: conversations } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userId);
+      
+      if (conversations && conversations.length > 0) {
+        const conversationIds = conversations.map(c => c.id);
+        await supabase
+          .from('messages')
+          .delete()
+          .in('conversation_id', conversationIds);
+      }
+
+      // 3. Deletar conversas do usuário
+      await supabase
+        .from('conversations')
+        .delete()
+        .eq('user_id', userId);
+
+      // 4. Deletar logs de atividade do usuário
+      await supabase
+        .from('activity_logs')
+        .delete()
+        .eq('user_id', userId);
+
+      // 5. Deletar roles do usuário
+      await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', userId);
+
+      // 6. Deletar convites feitos pelo usuário
+      await supabase
+        .from('invites')
+        .delete()
+        .eq('invited_by', userId);
+
+      // 7. Deletar profile do usuário
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (profileError) {
+        throw profileError;
+      }
+    },
+    onSuccess: () => {
+      setUsers(prev => prev.filter(u => u.id !== userDelete.itemToDelete));
+      fetchActivityLogs();
+    },
+    successMessage: 'Usuário e todos os dados relacionados foram excluídos',
+    errorMessage: 'Erro ao excluir usuário',
+  });
+
+  // Hook para exclusão de convite
+  const inviteDelete = useDeleteWithConfirmation<string>({
+    onDelete: async (inviteId) => {
+      const { error } = await supabase
+        .from('invites')
+        .delete()
+        .eq('id', inviteId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setInvites(prev => prev.filter(i => i.id !== inviteDelete.itemToDelete));
+    },
+    successMessage: 'Convite excluído',
+    errorMessage: 'Erro ao excluir convite',
+  });
+
+  // Hook para exclusão de documento
+  const docDelete = useDeleteWithConfirmation<number[]>({
+    onDelete: async (docIds) => {
+      const { error } = await supabase
+        .from('documents')
+        .delete()
+        .in('id', docIds);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      const deletedIds = new Set(docDelete.itemToDelete || []);
+      setDocuments(prev => prev.filter(d => !deletedIds.has(d.id)));
+    },
+    successMessage: 'Documento excluído',
+    errorMessage: 'Erro ao excluir documento',
+  });
 
   useEffect(() => {
     if (!isAdmin) {
@@ -267,20 +360,6 @@ export default function Admin() {
     toast.success('Link copiado para a área de transferência!');
   };
 
-  const deleteInvite = async (inviteId: string) => {
-    const { error } = await supabase
-      .from('invites')
-      .delete()
-      .eq('id', inviteId);
-
-    if (error) {
-      toast.error('Erro ao excluir convite');
-      return;
-    }
-    toast.success('Convite excluído');
-    fetchInvites();
-  };
-
   const getStatusBadge = (status: string, expiresAt: string) => {
     const isExpired = new Date(expiresAt) < new Date();
     if (isExpired && status === 'pending') {
@@ -338,106 +417,6 @@ export default function Admin() {
 
     toast.success('Cargo atualizado');
     fetchUsers();
-  };
-
-  const deleteUser = async (userId: string) => {
-    // Apenas TK Masters podem deletar usuários
-    if (!isTkMaster) {
-      toast.error('Sem permissão para excluir usuários');
-      return;
-    }
-
-    try {
-      // 1. Deletar mensagens das conversas do usuário
-      const { data: conversations } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('user_id', userId);
-      
-      if (conversations && conversations.length > 0) {
-        const conversationIds = conversations.map(c => c.id);
-        await supabase
-          .from('messages')
-          .delete()
-          .in('conversation_id', conversationIds);
-      }
-
-      // 2. Deletar conversas do usuário
-      await supabase
-        .from('conversations')
-        .delete()
-        .eq('user_id', userId);
-
-      // 3. Deletar logs de atividade do usuário
-      await supabase
-        .from('activity_logs')
-        .delete()
-        .eq('user_id', userId);
-
-      // 4. Deletar roles do usuário
-      await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
-
-      // 5. Deletar convites feitos pelo usuário
-      await supabase
-        .from('invites')
-        .delete()
-        .eq('invited_by', userId);
-
-      // 6. Deletar profile do usuário
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (profileError) {
-        console.error('Error deleting profile:', profileError);
-        toast.error('Erro ao excluir perfil do usuário');
-        return;
-      }
-
-      toast.success('Usuário e todos os dados relacionados foram excluídos');
-      fetchData();
-    } catch (err) {
-      console.error('Error deleting user:', err);
-      toast.error('Erro ao excluir usuário');
-    }
-  };
-
-  const confirmDeleteUser = () => {
-    if (deleteUserConfirm) {
-      deleteUser(deleteUserConfirm);
-      setDeleteUserConfirm(null);
-    }
-  };
-
-  const confirmDeleteInvite = () => {
-    if (deleteInviteConfirm) {
-      deleteInvite(deleteInviteConfirm);
-      setDeleteInviteConfirm(null);
-    }
-  };
-
-  const confirmDeleteDocument = () => {
-    if (deleteDocConfirm) {
-      deleteDocument(deleteDocConfirm);
-      setDeleteDocConfirm(null);
-    }
-  };
-  const deleteDocument = async (docIds: number[]) => {
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .in('id', docIds);
-    
-    if (error) {
-      toast.error('Erro ao excluir documento');
-      return;
-    }
-    toast.success('Documento excluído');
-    fetchDocuments();
   };
 
   const handleFileUpload = async (files: FileList | null) => {
@@ -654,11 +633,15 @@ export default function Admin() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => setDeleteUserConfirm(userItem.id)}
-                                disabled={userItem.id === profile?.id}
+                                onClick={() => userDelete.requestDelete(userItem.id)}
+                                disabled={userItem.id === profile?.id || userDelete.isDeleting}
                                 title="Excluir usuário"
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                {userDelete.isDeleting && userDelete.itemToDelete === userItem.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                )}
                               </Button>
                             </TableCell>
                           )}
@@ -741,10 +724,15 @@ export default function Admin() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => setDeleteInviteConfirm(invite.id)}
+                                  onClick={() => inviteDelete.requestDelete(invite.id)}
+                                  disabled={inviteDelete.isDeleting}
                                   title="Excluir convite"
                                 >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                  {inviteDelete.isDeleting && inviteDelete.itemToDelete === invite.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  )}
                                 </Button>
                               </div>
                             </TableCell>
@@ -898,10 +886,15 @@ export default function Admin() {
                             <Button 
                               variant="ghost" 
                               size="icon"
-                              onClick={() => setDeleteDocConfirm(doc.ids)}
+                              onClick={() => docDelete.requestDelete(doc.ids)}
+                              disabled={docDelete.isDeleting}
                               title="Excluir documento"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              {docDelete.isDeleting && JSON.stringify(docDelete.itemToDelete) === JSON.stringify(doc.ids) ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                              ) : (
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              )}
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -923,58 +916,34 @@ export default function Admin() {
       </main>
 
       {/* Diálogo de confirmação - Excluir Usuário */}
-      <AlertDialog open={!!deleteUserConfirm} onOpenChange={(open) => !open && setDeleteUserConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir usuário?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O usuário e todos os seus dados (conversas, mensagens, logs) serão permanentemente removidos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={userDelete.isDialogOpen}
+        onOpenChange={(open) => !open && userDelete.cancelDelete()}
+        onConfirm={userDelete.confirmDelete}
+        isDeleting={userDelete.isDeleting}
+        title="Excluir usuário?"
+        description="Esta ação não pode ser desfeita. O usuário e todos os seus dados (conversas, mensagens, logs, bug reports) serão permanentemente removidos."
+      />
 
       {/* Diálogo de confirmação - Excluir Convite */}
-      <AlertDialog open={!!deleteInviteConfirm} onOpenChange={(open) => !open && setDeleteInviteConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir convite?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O convite será permanentemente removido.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteInvite} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={inviteDelete.isDialogOpen}
+        onOpenChange={(open) => !open && inviteDelete.cancelDelete()}
+        onConfirm={inviteDelete.confirmDelete}
+        isDeleting={inviteDelete.isDeleting}
+        title="Excluir convite?"
+        description="Esta ação não pode ser desfeita. O convite será permanentemente removido."
+      />
 
       {/* Diálogo de confirmação - Excluir Documento */}
-      <AlertDialog open={!!deleteDocConfirm} onOpenChange={(open) => !open && setDeleteDocConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir documento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. O documento e todos os seus chunks serão permanentemente removidos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteDocument} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={docDelete.isDialogOpen}
+        onOpenChange={(open) => !open && docDelete.cancelDelete()}
+        onConfirm={docDelete.confirmDelete}
+        isDeleting={docDelete.isDeleting}
+        title="Excluir documento?"
+        description="Esta ação não pode ser desfeita. O documento e todos os seus chunks serão permanentemente removidos."
+      />
     </div>
   );
 }
