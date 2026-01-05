@@ -216,7 +216,7 @@ export type Database = {
           id?: string
           invited_by: string
           status?: string
-          token?: string
+          token: string
         }
         Update: {
           created_at?: string
