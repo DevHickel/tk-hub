@@ -52,6 +52,16 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    // Get the site URL from environment variable (REQUIRED)
+    const siteUrl = Deno.env.get("SITE_URL");
+    if (!siteUrl) {
+      console.error("SITE_URL environment variable is not configured");
+      return new Response(
+        JSON.stringify({ error: "Configuração de URL do site ausente. Configure a variável SITE_URL." }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
     // Check if there's a pending invite
     const { data: existingInvite } = await supabaseAdmin
       .from("invites")
@@ -62,8 +72,7 @@ serve(async (req: Request): Promise<Response> => {
 
     if (existingInvite) {
       // Return the existing invite link instead of creating a new one
-      const origin = req.headers.get("origin") || "https://bzhfeqdwxdmvydrdsdno.lovable.app";
-      const existingLink = `${origin}/register?token=${existingInvite.token}&email=${encodeURIComponent(email)}`;
+      const existingLink = `${siteUrl}/register?token=${existingInvite.token}&email=${encodeURIComponent(email)}`;
       return new Response(
         JSON.stringify({ 
           error: "Este email já possui um convite pendente",
@@ -101,9 +110,8 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log("Invite created with status:", insertedInvite?.status);
 
-    // Get the site URL from the request origin or use a default
-    const origin = req.headers.get("origin") || "https://bzhfeqdwxdmvydrdsdno.lovable.app";
-    const inviteLink = `${origin}/register?token=${token}&email=${encodeURIComponent(email)}`;
+    // Build invite link using the configured SITE_URL
+    const inviteLink = `${siteUrl}/register?token=${token}&email=${encodeURIComponent(email)}`;
 
     // Use Supabase Auth generateLink to create a signup link WITHOUT creating the user
     // This generates a magic link that can be sent via email
