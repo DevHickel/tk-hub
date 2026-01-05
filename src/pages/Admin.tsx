@@ -319,34 +319,27 @@ export default function Admin() {
     setIsSendingInvite(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('send-invite', {
-        body: {
+      // Call n8n webhook directly - all invite logic is handled by n8n
+      await fetch('https://n8n.vetorix.com.br/webhook-test/convite-usuario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        mode: 'no-cors', // Avoid CORS issues
+        body: JSON.stringify({
           email: inviteEmail,
           invitedBy: user?.id,
-        },
+          inviterEmail: profile?.email,
+          origin: window.location.origin,
+          timestamp: new Date().toISOString(),
+        }),
       });
 
-      if (error) {
-        console.error('Error sending invite:', error);
-        toast.error('Erro ao enviar convite');
-        return;
-      }
-
-      if (data?.error) {
-        toast.error(data.error);
-        return;
-      }
-
-      if (data?.warning) {
-        toast.warning(data.warning);
-      } else {
-        toast.success('Convite enviado com sucesso! Email enviado para ' + inviteEmail);
-      }
-
+      // With no-cors mode, we can't read the response
+      // Show success message and let user verify in n8n
+      toast.success('Convite enviado para processamento! Verifique o n8n.');
       setInviteEmail('');
       fetchInvites();
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Error sending invite:', err);
       toast.error('Erro ao enviar convite');
     } finally {
       setIsSendingInvite(false);
