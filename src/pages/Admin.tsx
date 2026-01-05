@@ -222,10 +222,11 @@ export default function Admin() {
   };
 
   const fetchUsers = async () => {
-    // Fetch profiles
+    // Fetch profiles - only users with full_name (completed registration)
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
+      .not('full_name', 'is', null)
       .order('full_name');
     
     if (profilesError) {
@@ -282,10 +283,11 @@ export default function Admin() {
   };
 
   const fetchInvites = async () => {
-    // Fetch invites
+    // Fetch only pending invites
     const { data: invitesData, error: invitesError } = await supabase
       .from('invites')
       .select('*')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
     
     if (invitesError) {
@@ -293,21 +295,7 @@ export default function Admin() {
       return;
     }
 
-    // Fetch all registered users emails to check if invite was used
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('email');
-    
-    const registeredEmails = new Set(profilesData?.map(p => p.email?.toLowerCase()) || []);
-
-    // Filter out invites where user has already registered
-    const filteredInvites = (invitesData || []).filter(invite => {
-      const isUserRegistered = registeredEmails.has(invite.email.toLowerCase());
-      // If user registered, mark as accepted and don't show
-      return !isUserRegistered;
-    });
-
-    setInvites(filteredInvites);
+    setInvites(invitesData || []);
   };
 
   const sendInvite = async () => {
