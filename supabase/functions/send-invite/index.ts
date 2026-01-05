@@ -41,7 +41,7 @@ serve(async (req: Request): Promise<Response> => {
       }
     );
 
-    // Check if user already exists
+    // Check if user already exists in auth.users
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const userExists = existingUsers?.users?.some(u => u.email === email);
     
@@ -61,8 +61,14 @@ serve(async (req: Request): Promise<Response> => {
       .single();
 
     if (existingInvite) {
+      // Return the existing invite link instead of creating a new one
+      const origin = req.headers.get("origin") || "https://bzhfeqdwxdmvydrdsdno.lovable.app";
+      const existingLink = `${origin}/register?token=${existingInvite.token}&email=${encodeURIComponent(email)}`;
       return new Response(
-        JSON.stringify({ error: "Este email já possui um convite pendente" }),
+        JSON.stringify({ 
+          error: "Este email já possui um convite pendente",
+          inviteLink: existingLink 
+        }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -72,16 +78,18 @@ serve(async (req: Request): Promise<Response> => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
 
-    // Create invite record
-    const { error: insertError } = await supabaseAdmin
+    // Create invite record with status EXPLICITLY set to 'pending'
+    const { data: insertedInvite, error: insertError } = await supabaseAdmin
       .from("invites")
       .insert({
-        email,
+        email: email,
         invited_by: invitedBy,
-        token,
+        token: token,
         status: "pending",
         expires_at: expiresAt.toISOString(),
-      });
+      })
+      .select()
+      .single();
 
     if (insertError) {
       console.error("Error creating invite:", insertError);
@@ -91,25 +99,32 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
+    console.log("Invite created with status:", insertedInvite?.status);
+
     // Get the site URL from the request origin or use a default
     const origin = req.headers.get("origin") || "https://bzhfeqdwxdmvydrdsdno.lovable.app";
     const inviteLink = `${origin}/register?token=${token}&email=${encodeURIComponent(email)}`;
 
-    // Send invite email using Supabase Auth
-    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: inviteLink,
-      data: {
-        invite_token: token,
+    // Use Supabase Auth generateLink to create a signup link WITHOUT creating the user
+    // This generates a magic link that can be sent via email
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: "magiclink",
+      email: email,
+      options: {
+        redirectTo: inviteLink,
+        data: {
+          invite_token: token,
+        },
       },
     });
 
-    if (inviteError) {
-      console.error("Error sending invite email:", inviteError);
-      // Even if email fails, the invite was created, so user can use the link manually
+    if (linkError) {
+      console.error("Error generating link:", linkError);
+      // Even if link generation fails, the invite was created
       return new Response(
         JSON.stringify({ 
           success: true, 
-          warning: "Convite criado, mas houve erro ao enviar email. Use o link manualmente.",
+          warning: "Convite criado! Copie o link manualmente para enviar ao usuário.",
           inviteLink,
           token 
         }),
@@ -117,12 +132,14 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`Invite sent successfully to ${email}`);
+    console.log(`Invite created successfully for ${email}`);
+    console.log(`Invite link: ${inviteLink}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Convite enviado com sucesso!",
+        message: "Convite criado com sucesso! Envie o link para o usuário.",
+        inviteLink,
         token 
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
