@@ -12,12 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search } from 'lucide-react';
+import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
 
 interface BugReportData {
   id: string;
@@ -137,19 +139,22 @@ export default function BugReport() {
     }
   };
 
-  const deleteReport = async (reportId: string) => {
-    const { error } = await supabase
-      .from('bug_reports')
-      .delete()
-      .eq('id', reportId);
-    
-    if (error) {
-      toast.error('Erro ao excluir report');
-    } else {
-      setReports(reports.filter(r => r.id !== reportId));
-      toast.success('Report excluído');
-    }
-  };
+  // Hook para exclusão de bug report com confirmação
+  const reportDelete = useDeleteWithConfirmation<string>({
+    onDelete: async (reportId) => {
+      const { error } = await supabase
+        .from('bug_reports')
+        .delete()
+        .eq('id', reportId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setReports(prev => prev.filter(r => r.id !== reportDelete.itemToDelete));
+    },
+    successMessage: 'Report excluído',
+    errorMessage: 'Erro ao excluir report',
+  });
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -433,9 +438,14 @@ export default function BugReport() {
                                 variant="ghost" 
                                 size="icon"
                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => deleteReport(report.id)}
+                                onClick={() => reportDelete.requestDelete(report.id)}
+                                disabled={reportDelete.isDeleting}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {reportDelete.isDeleting && reportDelete.itemToDelete === report.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -463,6 +473,16 @@ export default function BugReport() {
           />
         )}
       </main>
+
+      {/* Diálogo de confirmação - Excluir Bug Report */}
+      <DeleteConfirmDialog
+        open={reportDelete.isDialogOpen}
+        onOpenChange={(open) => !open && reportDelete.cancelDelete()}
+        onConfirm={reportDelete.confirmDelete}
+        isDeleting={reportDelete.isDeleting}
+        title="Excluir report?"
+        description="Esta ação não pode ser desfeita. O report será permanentemente removido."
+      />
     </div>
   );
 }
