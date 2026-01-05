@@ -320,10 +320,9 @@ export default function Admin() {
 
     try {
       // Call n8n webhook directly - all invite logic is handled by n8n
-      await fetch('https://n8n.vetorix.com.br/webhook-test/convite-usuario', {
+      const response = await fetch('https://n8n.vetorix.com.br/webhook-test/convite-usuario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        mode: 'no-cors', // Avoid CORS issues
         body: JSON.stringify({
           email: inviteEmail,
           invitedBy: user?.id,
@@ -332,6 +331,10 @@ export default function Admin() {
           timestamp: new Date().toISOString(),
         }),
       });
+
+      if (!response.ok) {
+        throw new Error('Webhook request failed');
+      }
 
       // With no-cors mode, we can't read the response
       // Show success message and let user verify in n8n
