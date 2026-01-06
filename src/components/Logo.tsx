@@ -1,5 +1,7 @@
 import { cn } from '@/lib/utils';
-import tkLogo from '@/assets/tk-logo-transparent.png';
+import { useTheme } from '@/contexts/ThemeContext';
+import tkLogoDark from '@/assets/tk-logo-dark.png';
+import tkLogoLight from '@/assets/tk-logo-light.png';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -8,21 +10,25 @@ interface LogoProps {
 }
 
 export function Logo({ size = 'md', showText = false, className }: LogoProps) {
+  const { theme } = useTheme();
+  
   const sizeClasses = {
     sm: 'h-10',
     md: 'h-16',
     lg: 'h-20',
   };
 
+  // Logo preta para modo claro, logo branca para modo escuro
+  const logoSrc = theme === 'dark' ? tkLogoLight : tkLogoDark;
+
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <img 
-        src={tkLogo} 
+        src={logoSrc} 
         alt="TK Solution" 
         className={cn(
           'object-contain transition-all duration-300',
-          sizeClasses[size],
-          'dark:invert'
+          sizeClasses[size]
         )}
       />
       {showText && (
