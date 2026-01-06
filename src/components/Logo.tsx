@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import tkLogo from '@/assets/tk-logo-new.png';
+import tkLogo from '@/assets/tk-logo-transparent.png';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -20,10 +20,9 @@ export function Logo({ size = 'md', showText = false, className }: LogoProps) {
         src={tkLogo} 
         alt="TK Solution" 
         className={cn(
-          'object-contain',
+          'object-contain transition-all duration-300',
           sizeClasses[size],
-          'dark:invert dark:brightness-0 dark:invert',
-          'brightness-0'
+          'dark:invert'
         )}
       />
       {showText && (
