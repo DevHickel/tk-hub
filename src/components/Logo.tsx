@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import tkLogo from '@/assets/tk-logo.png';
+import tkLogo from '@/assets/tk-logo-new.png';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
@@ -9,9 +9,9 @@ interface LogoProps {
 
 export function Logo({ size = 'md', showText = false, className }: LogoProps) {
   const sizeClasses = {
-    sm: 'h-8',
-    md: 'h-12',
-    lg: 'h-16',
+    sm: 'h-10',
+    md: 'h-16',
+    lg: 'h-20',
   };
 
   return (
@@ -19,7 +19,12 @@ export function Logo({ size = 'md', showText = false, className }: LogoProps) {
       <img 
         src={tkLogo} 
         alt="TK Solution" 
-        className={cn('object-contain', sizeClasses[size])}
+        className={cn(
+          'object-contain',
+          sizeClasses[size],
+          'dark:invert dark:brightness-0 dark:invert',
+          'brightness-0'
+        )}
       />
       {showText && (
         <span className="font-semibold text-foreground">
