@@ -265,6 +265,7 @@ export type Database = {
           peso_atual: number | null
           resposta_ia: string
           updated_at: string | null
+          user_id: string | null
           votos_negativos: number | null
           votos_positivos: number | null
         }
@@ -276,6 +277,7 @@ export type Database = {
           peso_atual?: number | null
           resposta_ia: string
           updated_at?: string | null
+          user_id?: string | null
           votos_negativos?: number | null
           votos_positivos?: number | null
         }
@@ -287,6 +289,7 @@ export type Database = {
           peso_atual?: number | null
           resposta_ia?: string
           updated_at?: string | null
+          user_id?: string | null
           votos_negativos?: number | null
           votos_positivos?: number | null
         }
@@ -506,6 +509,13 @@ export type Database = {
           id: number
           metadata: Json
           similarity: number
+        }[]
+      }
+      validate_invite_token: {
+        Args: { p_token: string }
+        Returns: {
+          email: string
+          is_valid: boolean
         }[]
       }
     }
