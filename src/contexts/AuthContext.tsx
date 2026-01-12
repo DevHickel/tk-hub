@@ -42,7 +42,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
+    
+    // Se perfil não existe, criar um novo automaticamente
+    if (!data) {
+      const { data: userData } = await supabase.auth.getUser();
+      const userEmail = userData?.user?.email;
+      const userMeta = userData?.user?.user_metadata;
+      
+      const { data: newProfile, error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: userEmail,
+          full_name: userMeta?.full_name || null
+        })
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating profile:', insertError);
+        return null;
+      }
+      return newProfile as Profile;
+    }
     
     if (error) {
       console.error('Error fetching profile:', error);
