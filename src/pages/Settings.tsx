@@ -36,16 +36,18 @@ export default function Settings() {
     
     setIsSaving(true);
     
-    // Update profile with full_name (display name)
+    // Usar upsert para garantir que o perfil seja criado se não existir
     const { error } = await supabase
       .from('profiles')
-      .update({ 
+      .upsert({ 
+        id: user.id,
+        email: user.email,
         full_name: fullName,
         theme_preference: theme
-      })
-      .eq('id', user.id);
+      });
     
     if (error) {
+      console.error('Error saving profile:', error);
       toast.error('Erro ao salvar configurações');
     } else {
       // Also update user metadata (display name)
@@ -109,11 +111,14 @@ export default function Settings() {
 
       const urlWithCacheBust = `${publicUrl}?t=${timestamp}`;
 
-      // Update profile with avatar URL
+      // Usar upsert para garantir que o perfil seja atualizado ou criado
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: urlWithCacheBust })
-        .eq('id', user.id);
+        .upsert({ 
+          id: user.id,
+          email: user.email,
+          avatar_url: urlWithCacheBust 
+        });
 
       if (updateError) {
         throw updateError;

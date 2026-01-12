@@ -148,6 +148,33 @@ export type Database = {
         }
         Relationships: []
       }
+      compliance_rules: {
+        Row: {
+          course_name: string
+          created_at: string | null
+          id: string
+          min_hours: number | null
+          required_fields: Json | null
+          validity_months: number | null
+        }
+        Insert: {
+          course_name: string
+          created_at?: string | null
+          id?: string
+          min_hours?: number | null
+          required_fields?: Json | null
+          validity_months?: number | null
+        }
+        Update: {
+          course_name?: string
+          created_at?: string | null
+          id?: string
+          min_hours?: number | null
+          required_fields?: Json | null
+          validity_months?: number | null
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
@@ -299,6 +326,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      processed_certificates: {
+        Row: {
+          completion_date: string | null
+          course_name: string | null
+          created_at: string | null
+          employee_name: string | null
+          expiry_date: string | null
+          file_name: string | null
+          file_url: string | null
+          hours: number | null
+          id: string
+          org_id: string | null
+          raw_data: Json | null
+          rejection_reason: string | null
+          status: string | null
+        }
+        Insert: {
+          completion_date?: string | null
+          course_name?: string | null
+          created_at?: string | null
+          employee_name?: string | null
+          expiry_date?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          hours?: number | null
+          id?: string
+          org_id?: string | null
+          raw_data?: Json | null
+          rejection_reason?: string | null
+          status?: string | null
+        }
+        Update: {
+          completion_date?: string | null
+          course_name?: string | null
+          created_at?: string | null
+          employee_name?: string | null
+          expiry_date?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          hours?: number | null
+          id?: string
+          org_id?: string | null
+          raw_data?: Json | null
+          rejection_reason?: string | null
+          status?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
