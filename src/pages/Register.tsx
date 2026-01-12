@@ -74,35 +74,37 @@ export default function Register() {
       return;
     }
 
+    // Use secure RPC function to validate invite without exposing all invite data
     const { data, error } = await supabase
-      .from('invites')
-      .select('*')
-      .eq('token', inviteToken)
-      .single();
+      .rpc('validate_invite_token', { p_token: inviteToken });
 
-    if (error || !data) {
+    if (error) {
+      console.error('Error validating invite:', error);
       setIsValidating(false);
       setIsInvalidInvite(true);
-      setInvalidReason('Convite inválido ou não encontrado.');
+      setInvalidReason('Erro ao validar convite. Tente novamente.');
       return;
     }
 
-    if (data.status === 'accepted') {
+    // The function returns a table with is_valid and email
+    const result = data?.[0];
+    
+    if (!result || !result.is_valid) {
       setIsValidating(false);
       setIsInvalidInvite(true);
-      setInvalidReason('Este convite já foi utilizado.');
+      setInvalidReason('Convite inválido, expirado ou já utilizado.');
       return;
     }
 
-    if (new Date(data.expires_at) < new Date()) {
-      setIsValidating(false);
-      setIsInvalidInvite(true);
-      setInvalidReason('Este convite expirou. Solicite um novo convite ao administrador.');
-      return;
-    }
-
-    setInvite(data);
-    setEmail(data.email);
+    // Create a minimal invite object for the registration flow
+    setInvite({
+      id: '', // Will be looked up server-side via trigger
+      email: result.email,
+      token: inviteToken,
+      status: 'pending',
+      expires_at: '', // Already validated by the function
+    });
+    setEmail(result.email);
     setIsValidating(false);
   };
 
