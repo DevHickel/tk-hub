@@ -44,7 +44,7 @@ export async function getOrCreateEmbedding(text: string): Promise<number[]> {
   return embedding
 }
 
-// Chunking — (rag-pipeline/SKILL.md)
+// Chunking por palavras — mantido para compatibilidade
 export function chunkText(text: string, size = 500, overlap = 50): string[] {
   const words = text.split(' ')
   const chunks: string[] = []
@@ -53,4 +53,23 @@ export function chunkText(text: string, size = 500, overlap = 50): string[] {
     if (i + size >= words.length) break
   }
   return chunks
+}
+
+// Chunking por caracteres — igual ao n8n (5000 chars, 500 overlap, respeita parágrafos)
+export function chunkTextByChars(text: string, size = 5000, overlap = 500): string[] {
+  if (text.length <= size) return [text]
+  const chunks: string[] = []
+  let start = 0
+  while (start < text.length) {
+    let end = start + size
+    // Try to break at a paragraph boundary within the last 20% of the chunk
+    if (end < text.length) {
+      const breakSearch = text.lastIndexOf('\n\n', end)
+      if (breakSearch > start + size * 0.8) end = breakSearch
+    }
+    chunks.push(text.slice(start, end).trim())
+    start = end - overlap
+    if (start >= text.length) break
+  }
+  return chunks.filter(c => c.length > 0)
 }

@@ -5,10 +5,10 @@ import { QUEUES } from '../queues/index.js'
 import { PdfJobData } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { parseWithLlamaParse } from '../services/llamaparse.service.js'
-import { getOrCreateEmbedding, chunkText } from '../services/embedding.service.js'
+import { getOrCreateEmbedding, chunkTextByChars } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
 
-async function updateDocumentStatus(documentId: string, status: string) {
+async function setDocumentStatus(documentId: string, status: string) {
   await supabase
     .from('documents')
     .update({ status, updated_at: new Date().toISOString() })
@@ -23,7 +23,7 @@ export function setupPdfWorker() {
 
       try {
         // 1. Status → processing
-        await updateDocumentStatus(documentId, 'processing')
+        await setDocumentStatus(documentId, 'processing')
         await job.updateProgress(10)
 
         // 2. Baixar arquivo do Storage
@@ -36,55 +36,89 @@ export function setupPdfWorker() {
         const buffer = Buffer.from(await fileData.arrayBuffer())
         await job.updateProgress(20)
 
-        // 3. Extrair texto com LlamaParse (único parser — rag-pipeline/SKILL.md)
-        const text = await parseWithLlamaParse(buffer, fileName)
+        // 3. Extrair texto com LlamaParse — retorna pages com page_number
+        const pages = await parseWithLlamaParse(buffer, fileName)
         await job.updateProgress(40)
 
-        // 4. Salvar conteúdo no documento
-        await supabase
-          .from('documents')
-          .update({ content: text.slice(0, 50000) }) // limite razoável
-          .eq('id', documentId)
+        safeLog('info', 'LlamaParse retornou páginas', { documentId, pages: pages.length })
 
-        // 5. Chunkar e gerar embeddings com cache (rag-pipeline/SKILL.md)
-        const chunks = chunkText(text)
-        safeLog('info', 'Iniciando embeddings', { documentId, chunks: chunks.length })
-
-        for (let i = 0; i < chunks.length; i++) {
-          const embedding = await getOrCreateEmbedding(chunks[i])
-
-          await supabase.from('document_chunks').insert({
-            document_id: documentId,
-            content: chunks[i],
-            chunk_index: i,
-            embedding: JSON.stringify(embedding),
-          })
-
-          // Progresso de 40% a 90%
-          await job.updateProgress(40 + Math.floor((i / chunks.length) * 50))
+        if (pages.length === 0) {
+          throw new Error('LlamaParse não retornou nenhuma página com conteúdo')
         }
 
-        // 6. Marcar como ativo
-        await updateDocumentStatus(documentId, 'active')
-        await job.updateProgress(100)
+        // 4. Para cada página: chunk → embedding → insert em documents
+        // O registro principal (documentId) já existe com status=processing
+        // O primeiro chunk atualiza o registro principal; os demais criam linhas novas
+        let isFirstChunk = true
+        let totalChunks = 0
 
-        safeLog('info', 'Documento processado com sucesso', { documentId, chunks: chunks.length })
+        for (let pi = 0; pi < pages.length; pi++) {
+          const pageData = pages[pi]
+          const chunks = chunkTextByChars(pageData.text)
+
+          for (let ci = 0; ci < chunks.length; ci++) {
+            const chunk = chunks[ci]
+            if (!chunk.trim()) continue
+
+            const embedding = await getOrCreateEmbedding(chunk)
+            const metadata = {
+              source: fileName,
+              page_number: pageData.page,
+              total_pages: pageData.total,
+              chunk_index: ci,
+            }
+
+            if (isFirstChunk) {
+              // Atualiza o registro principal com conteúdo + embedding + metadata
+              await supabase
+                .from('documents')
+                .update({
+                  content: chunk,
+                  embedding: JSON.stringify(embedding),
+                  metadata,
+                  status: 'active',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', documentId)
+              isFirstChunk = false
+            } else {
+              // Insere novos chunks como linhas independentes na tabela documents
+              // com o mesmo file_name para list_rag_documents() agrupá-los corretamente
+              await supabase.from('documents').insert({
+                content: chunk,
+                embedding: JSON.stringify(embedding),
+                metadata,
+                file_name: fileName,
+                file_path: filePath,
+                source: 'upload',
+                status: 'active',
+              })
+            }
+
+            totalChunks++
+          }
+
+          // Progresso de 40% a 90% proporcionalmente às páginas
+          await job.updateProgress(40 + Math.floor(((pi + 1) / pages.length) * 50))
+        }
+
+        await job.updateProgress(100)
+        safeLog('info', 'Documento processado com sucesso', { documentId, totalChunks })
       } catch (error) {
         Sentry.captureException(error, {
           tags: { job: 'pdf-processing', documentId },
         })
-        await updateDocumentStatus(documentId, 'error')
-        throw error // BullMQ faz retry automático (3 tentativas — queue/SKILL.md)
+        await setDocumentStatus(documentId, 'error')
+        throw error // BullMQ faz retry automático (3 tentativas)
       }
     },
     {
       connection: redis,
-      concurrency: 5, // processa até 5 PDFs ao mesmo tempo (queue/SKILL.md)
+      concurrency: 3, // reduzido para não sobrecarregar LlamaParse
     }
   )
 
   worker.on('failed', (job, error) => {
-    // Não logar dados sensíveis — só mensagem de erro
     safeLog('error', `Job ${job?.id} falhou após todas as tentativas`, {
       error: (error as Error).message,
       documentId: job?.data.documentId,

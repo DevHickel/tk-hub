@@ -47,6 +47,7 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -153,10 +154,24 @@ function CertificatesTab() {
   const [expiryFilter, setExpiryFilter] = useState('all');
   const [selected, setSelected] = useState<Certificate | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [extractingId, setExtractingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { setPage(0); }, [search, statusFilter, expiryFilter]);
   useEffect(() => { fetchCerts(); }, [page, search, statusFilter, expiryFilter]);
+
+  // Auto-refresh while any cert is processing
+  useEffect(() => {
+    const hasProcessing = certs.some(c => c.status === 'processing');
+    if (hasProcessing && !pollRef.current) {
+      pollRef.current = setInterval(() => fetchCerts(), 5000);
+    } else if (!hasProcessing && pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, [certs]);
 
   const fetchCerts = async () => {
     setLoading(true);
@@ -245,6 +260,34 @@ function CertificatesTab() {
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleExtract = async (cert: Certificate, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!cert.file_url || !cert.file_name) {
+      toast.error('Certificado sem URL de arquivo. Reenvie o certificado.');
+      return;
+    }
+    setExtractingId(cert.id);
+    // Optimistically update status in UI
+    setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'processing' } : c));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const res = await fetch(`${apiUrl}/api/certificates/${cert.id}/extract`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_url: cert.file_url, file_name: cert.file_name }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Erro ao disparar extração');
+      toast.success('Extração iniciada! Os dados serão preenchidos automaticamente.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao iniciar extração.');
+      setCerts(prev => prev.map(c => c.id === cert.id ? { ...c, status: 'pending' } : c));
+    } finally {
+      setExtractingId(null);
     }
   };
 
@@ -368,6 +411,8 @@ function CertificatesTab() {
                 certs.map((cert) => {
                   const cfg = CERT_STATUS[cert.status ?? ''] ?? { label: cert.status ?? '—', variant: 'outline' as const, icon: null };
                   const isDeleting = deletingId === cert.id;
+                  const isExtracting = extractingId === cert.id;
+                  const canExtract = (cert.status === 'pending' || cert.status === 'error') && !!cert.file_url;
                   return (
                     <TableRow key={cert.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(cert)}>
                       <TableCell className="font-medium">{cert.employee_name ?? '—'}</TableCell>
@@ -381,6 +426,19 @@ function CertificatesTab() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <div className="flex items-center gap-1">
+                          {canExtract && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                              disabled={isExtracting}
+                              onClick={(e) => handleExtract(cert, e)}
+                              title="Extrair dados com IA"
+                            >
+                              {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                            </Button>
+                          )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -391,6 +449,7 @@ function CertificatesTab() {
                         >
                           {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
