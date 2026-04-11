@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import tkzinhoAvatar from '@/assets/tkzinho.jpg';
+import { logActivity } from '@/lib/activity';
 import {
   Plus,
   Send,
@@ -154,7 +155,7 @@ export default function Chat() {
       .single();
     if (userMsg) setMessages(prev => [...prev, { ...userMsg, role: 'user' as const }]);
 
-    await supabase.from('activity_logs').insert({ user_id: user.id, action: 'message_sent', details: { conversation_id: conversationId } });
+    await logActivity(user.id, 'message_sent', { conversation_id: conversationId });
 
     try {
       const { data: { session } } = await supabase.auth.getSession();

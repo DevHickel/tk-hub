@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
+import { logActivity } from '@/lib/activity';
 
 type AppRole = 'admin' | 'user' | 'tk_master';
 
@@ -328,6 +329,7 @@ export default function Admin() {
       // With no-cors mode, we can't read the response
       // Show success message and let user verify in n8n
       toast.success('Convite enviado para processamento! Verifique o n8n.');
+      if (user) await logActivity(user.id, 'invite_sent', { email: inviteEmail });
       setInviteEmail('');
       fetchInvites();
     } catch (err) {

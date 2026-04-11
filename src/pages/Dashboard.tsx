@@ -35,7 +35,7 @@ interface DashboardMetrics {
 interface RecentActivity {
   id: number;
   action: string;
-  details: { file_name?: string; message?: string } | null;
+  details: Record<string, unknown> | null;
   timestamp: string | null;
   profiles?: { full_name: string | null; email: string | null } | null;
 }
@@ -354,17 +354,36 @@ function MetricCard({
   );
 }
 
-function formatAction(action: string, details: { file_name?: string; message?: string } | null): string {
-  const map: Record<string, string> = {
-    upload: 'Enviou documento',
-    chat: 'Enviou mensagem no chat',
-    login: 'Entrou no sistema',
-    logout: 'Saiu do sistema',
-    delete_document: 'Deletou documento',
-    invite_sent: 'Enviou convite',
-    role_changed: 'Alterou role de usuário',
-  };
-  const base = map[action] ?? action;
-  if (details?.file_name) return `${base}: ${details.file_name}`;
-  return base;
+function formatAction(action: string, details: Record<string, unknown> | null): string {
+  const d = details as { file_name?: string; email?: string } | null;
+
+  switch (action) {
+    case 'message_sent':
+      return 'Enviou mensagem no assistente';
+    case 'invite_sent':
+      return d?.email ? `Enviou convite para ${d.email}` : 'Enviou convite de registro';
+    case 'certificate_uploaded':
+      return d?.file_name ? `Enviou certificado: ${d.file_name}` : 'Enviou certificado';
+    case 'rag_document_uploaded':
+      return d?.file_name ? `Enviou documento para IA: ${d.file_name}` : 'Enviou documento para IA';
+    case 'rag_document_deleted':
+      return d?.file_name ? `Excluiu documento da IA: ${d.file_name}` : 'Excluiu documento da IA';
+    case 'certificate_deleted':
+      return d?.file_name ? `Excluiu certificado: ${d.file_name}` : 'Excluiu certificado';
+    case 'permission_changed':
+      return 'Alterou permissão de usuário';
+    case 'user_login':
+      return 'Entrou no sistema';
+    case 'user_logout':
+      return 'Saiu do sistema';
+    case 'profile_updated':
+      return 'Atualizou o perfil';
+    // legacy actions
+    case 'upload':
+      return d?.file_name ? `Enviou documento: ${d.file_name}` : 'Enviou documento';
+    case 'delete_document':
+      return d?.file_name ? `Excluiu documento: ${d.file_name}` : 'Excluiu documento';
+    default:
+      return action.replace(/_/g, ' ');
+  }
 }

@@ -51,6 +51,7 @@ import {
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { logActivity } from '@/lib/activity';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ function CertificatesTab() {
       if (dbError) throw dbError;
 
       toast.success('Certificado enviado! Aguardando análise.');
+      await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
       await fetchCerts();
     } catch (err) {
       console.error(err);
@@ -462,6 +464,7 @@ function RagTab() {
       const { error } = await supabase.from('documents').delete().in('id', doc.ids);
       if (error) throw error;
       toast.success('Documento excluído com sucesso.');
+      if (user) await logActivity(user.id, 'rag_document_deleted', { file_name: doc.source_name });
       await fetchDocs();
     } catch (err) {
       console.error(err);
@@ -506,6 +509,7 @@ function RagTab() {
       }
 
       toast.success('Documento enviado! Será processado em background.');
+      await logActivity(user.id, 'rag_document_uploaded', { file_name: file.name });
       await fetchDocs();
     } catch (err) {
       console.error(err);
