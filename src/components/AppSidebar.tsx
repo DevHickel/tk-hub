@@ -50,11 +50,15 @@ export function AppSidebar() {
 
       {/* Nav principal */}
       <nav className="flex-1 p-3 space-y-1">
-        {navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
+        {/* Admin-only items */}
+        {isAdmin && navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
+        {/* All users */}
         {navItem('/chat', <MessageSquare className="h-4 w-4" />, 'Assistente IA')}
-        {navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
+        {/* Admin-only items */}
+        {isAdmin && navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
         {isAdmin && navItem('/admin', <Shield className="h-4 w-4" />, 'Admin')}
-        {navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios')}
+        {isAdmin && navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios')}
+        {/* All users */}
         {navItem('/bug-report', <Bug className="h-4 w-4" />, 'Reportar Bug')}
       </nav>
 

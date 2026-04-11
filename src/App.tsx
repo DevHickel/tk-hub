@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -20,6 +22,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+/** Admins → /dashboard | Users → /chat | Loading → null */
+function RootRedirect() {
+  const { user, isAdmin, loading } = useAuth()
+  if (loading) return null
+  if (!user) return <Navigate to="/login" replace />
+  return <Navigate to={isAdmin ? '/dashboard' : '/chat'} replace />
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -29,18 +39,20 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/documents" element={<Documents />} />
+              {/* Admin-only routes */}
+              <Route path="/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
+              <Route path="/documents" element={<RequireAdmin><Documents /></RequireAdmin>} />
+              <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
+              <Route path="/report-settings" element={<RequireAdmin><ReportSettings /></RequireAdmin>} />
+              {/* All authenticated users */}
               <Route path="/chat" element={<Chat />} />
-              <Route path="/admin" element={<Admin />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/bug-report" element={<BugReport />} />
-              <Route path="/report-settings" element={<ReportSettings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
