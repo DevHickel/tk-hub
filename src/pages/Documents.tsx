@@ -23,17 +23,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AppSidebar } from '@/components/AppSidebar';
 import {
   FileText,
-  MessageSquare,
-  TrendingUp,
   Search,
-  Shield,
-  Settings,
-  Bug,
-  LogOut,
   ExternalLink,
   AlertTriangle,
   CheckCircle2,
@@ -41,7 +35,6 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
-  BarChart3,
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -171,76 +164,7 @@ export default function Documents() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="w-64 border-r bg-card flex flex-col">
-        <div className="p-4 border-b">
-          <Logo className="h-8 w-auto" />
-        </div>
-
-        <nav className="flex-1 p-3 space-y-1">
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <TrendingUp className="h-4 w-4" />
-            Dashboard
-          </Link>
-          <Link
-            to="/chat"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <MessageSquare className="h-4 w-4" />
-            Assistente IA
-          </Link>
-          <Link
-            to="/documents"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#004C97]/10 text-[#004C97] dark:text-blue-400 font-semibold text-sm"
-          >
-            <FileText className="h-4 w-4" />
-            Documentos
-          </Link>
-          {isAdmin && (
-            <Link
-              to="/admin"
-              className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-            >
-              <Shield className="h-4 w-4" />
-              Admin
-            </Link>
-          )}
-          <Link
-            to="/bug-report"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <Bug className="h-4 w-4" />
-            Reportar Bug
-          </Link>
-          <Link
-            to="/report-settings"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <BarChart3 className="h-4 w-4" />
-            Relatórios
-          </Link>
-        </nav>
-
-        <div className="p-3 border-t space-y-1">
-          <Link
-            to="/settings"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <Settings className="h-4 w-4" />
-            Configurações
-          </Link>
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </button>
-        </div>
-      </aside>
+      <AppSidebar />
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">

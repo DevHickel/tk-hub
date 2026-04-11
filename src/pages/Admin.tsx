@@ -9,8 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { AppSidebar } from '@/components/AppSidebar';
 import { Users, FileText, Activity, Search, Trash2, Upload, MessageSquare, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -507,24 +507,19 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Logo size="sm" />
-            <h1 className="text-xl font-semibold">Administração</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate('/chat')} className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
-              Ir para Chat
-            </Button>
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen bg-background">
+      <AppSidebar />
 
-      <main className="container mx-auto px-4 py-6">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-lg font-semibold">Administração</h1>
+            <p className="text-xs text-muted-foreground">Usuários, convites e atividade</p>
+          </div>
+          <ThemeToggle />
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6">
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="users" className="flex items-center gap-2">
@@ -897,9 +892,10 @@ export default function Admin() {
             </div>
           </TabsContent>
         </Tabs>
-      </main>
+        </main>
+      </div>
 
-      {/* Diálogo de confirmação - Excluir Usuário */}
+      {/* Diálogos de confirmação */}
       <DeleteConfirmDialog
         open={userDelete.isDialogOpen}
         onOpenChange={(open) => !open && userDelete.cancelDelete()}
@@ -908,8 +904,6 @@ export default function Admin() {
         title="Excluir usuário?"
         description="Esta ação não pode ser desfeita. O usuário e todos os seus dados (conversas, mensagens, logs, bug reports) serão permanentemente removidos."
       />
-
-      {/* Diálogo de confirmação - Excluir Convite */}
       <DeleteConfirmDialog
         open={inviteDelete.isDialogOpen}
         onOpenChange={(open) => !open && inviteDelete.cancelDelete()}
@@ -918,8 +912,6 @@ export default function Admin() {
         title="Excluir convite?"
         description="Esta ação não pode ser desfeita. O convite será permanentemente removido."
       />
-
-      {/* Diálogo de confirmação - Excluir Documento */}
       <DeleteConfirmDialog
         open={docDelete.isDialogOpen}
         onOpenChange={(open) => !open && docDelete.cancelDelete()}
@@ -931,3 +923,4 @@ export default function Admin() {
     </div>
   );
 }
+

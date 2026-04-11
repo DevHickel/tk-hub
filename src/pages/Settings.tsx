@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, User, Moon, Lock, Save, Camera, Mail } from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
+import { User, Moon, Lock, Save, Camera, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Settings() {
@@ -162,21 +162,20 @@ export default function Settings() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/chat')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Logo size="sm" />
-            <h1 className="text-xl font-semibold">Configurações</h1>
+    <div className="flex h-screen bg-background">
+      <AppSidebar />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-lg font-semibold">Configurações</h1>
+            <p className="text-xs text-muted-foreground">Perfil, segurança e preferências</p>
           </div>
           <ThemeToggle />
-        </div>
-      </header>
+        </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-2xl space-y-6">
+        <main className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-2xl space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -315,7 +314,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
-      </main>
+        </div>
+        </main>
+      </div>
     </div>
   );
 }

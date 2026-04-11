@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { ArrowLeft, Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search, Loader2 } from 'lucide-react';
+import { AppSidebar } from '@/components/AppSidebar';
+import { Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
@@ -257,21 +257,19 @@ export default function BugReport() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/chat')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Logo size="sm" />
-            <h1 className="text-xl font-semibold">Reportar Bug</h1>
+    <div className="flex h-screen bg-background">
+      <AppSidebar />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-lg font-semibold">Reportar Bug</h1>
+            <p className="text-xs text-muted-foreground">Relate problemas encontrados no sistema</p>
           </div>
           <ThemeToggle />
-        </div>
-      </header>
+        </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-6xl">
+        <main className="flex-1 overflow-y-auto p-6">
         {canManageReports ? (
           <Tabs defaultValue="send" className="space-y-6" onValueChange={(v) => v === 'manage' && fetchReports()}>
             <TabsList className="grid w-full max-w-md grid-cols-2">
@@ -472,7 +470,8 @@ export default function BugReport() {
             isSubmitting={isSubmitting}
           />
         )}
-      </main>
+        </main>
+      </div>
 
       {/* Diálogo de confirmação - Excluir Bug Report */}
       <DeleteConfirmDialog

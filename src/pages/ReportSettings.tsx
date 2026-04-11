@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { api, type ReportConfig, type ReportRecipient } from '@/lib/api'
-import { Logo } from '@/components/Logo'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { AppSidebar } from '@/components/AppSidebar'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,14 +27,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import {
-  TrendingUp,
-  MessageSquare,
-  FileText,
-  Shield,
-  Bug,
   Settings,
-  LogOut,
-  BarChart3,
   Users,
   Sliders,
   Trash2,
@@ -80,56 +73,6 @@ function calcPreview(cfg: typeof DEFAULTS) {
   const hours = minutes / 60
   const value = hours * cfg.hour_cost_brl
   return { hours: hours.toFixed(1), value: value.toFixed(2) }
-}
-
-// ── Sidebar shared component ─────────────────────────────────────────────────
-function Sidebar({
-  isAdmin,
-  onSignOut,
-}: {
-  isAdmin: boolean
-  onSignOut: () => void
-}) {
-  const navItem = (to: string, icon: React.ReactNode, label: string, active = false) => (
-    <Link
-      to={to}
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-        active
-          ? 'bg-[#004C97]/10 text-[#004C97] dark:text-blue-400 font-semibold'
-          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      {icon}
-      {label}
-    </Link>
-  )
-
-  return (
-    <aside className="w-64 border-r bg-card flex flex-col">
-      <div className="p-4 border-b">
-        <Logo className="h-8 w-auto" />
-      </div>
-      <nav className="flex-1 p-3 space-y-1">
-        {navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
-        {navItem('/chat', <MessageSquare className="h-4 w-4" />, 'Assistente IA')}
-        {navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
-        {isAdmin &&
-          navItem('/admin', <Shield className="h-4 w-4" />, 'Admin')}
-        {navItem('/bug-report', <Bug className="h-4 w-4" />, 'Reportar Bug')}
-        {navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios', true)}
-      </nav>
-      <div className="p-3 border-t space-y-1">
-        {navItem('/settings', <Settings className="h-4 w-4" />, 'Configurações')}
-        <button
-          onClick={onSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
-        >
-          <LogOut className="h-4 w-4" />
-          Sair
-        </button>
-      </div>
-    </aside>
-  )
 }
 
 // ── Tab 1: Destinatários ─────────────────────────────────────────────────────
@@ -527,19 +470,13 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function ReportSettings() {
-  const { signOut, isAdmin, profile } = useAuth()
-  const navigate = useNavigate()
+  const { isAdmin, profile } = useAuth()
 
   const canEdit = isAdmin || ['manager', 'tk_master'].includes((profile as { role?: string })?.role ?? '')
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
-
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar isAdmin={isAdmin} onSignOut={handleSignOut} />
+      <AppSidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
