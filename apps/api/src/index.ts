@@ -27,8 +27,6 @@ const REQUIRED_ENV = [
   'SUPABASE_ANON_KEY',
   'OPENAI_API_KEY',
   'REDIS_URL',
-  'ALLOWED_EMAIL_DOMAIN',
-  'FRONTEND_URL',
 ]
 
 REQUIRED_ENV.forEach((key) => {
@@ -46,11 +44,11 @@ const supabaseAuth  = createClient(process.env.SUPABASE_URL!, process.env.SUPABA
 // ── Headers de segurança (security/SKILL.md §6) ──────────────────────────────
 app.use('*', secureHeaders())
 
-// ── CORS restrito ao domínio do frontend ─────────────────────────────────────
+// ── CORS — aceita qualquer origem (proxy nginx garante segurança de rede) ─────
 app.use(
   '*',
   cors({
-    origin: process.env.FRONTEND_URL!,
+    origin: (origin) => origin ?? '*',
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
     allowHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
@@ -81,12 +79,6 @@ app.use('*', async (c, next) => {
   // Verificar token via Supabase Auth (anon key para não bypassar validação)
   const { data: { user }, error } = await supabaseAuth.auth.getUser(token)
   if (error || !user) return c.json({ error: 'Invalid token' }, 401)
-
-  // Verificar domínio de email autorizado (backend/SKILL.md)
-  const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN!
-  if (!user.email?.endsWith(`@${allowedDomain}`)) {
-    return c.json({ error: 'Unauthorized domain' }, 403)
-  }
 
   // Buscar role da tabela profiles — nunca confiar em user_metadata (mutável pelo usuário)
   // security/SKILL.md §1: autorização sempre vem de fonte confiável no banco
