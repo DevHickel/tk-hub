@@ -205,8 +205,8 @@ function CertificatesTab() {
     setUploading(true);
     try {
       const ext = file.name.split('.').pop();
-      const safeName = `${user.id}_${Date.now()}.${ext}`;
-      const path = `certificates/${safeName}`;
+      // path: userId/timestamp.ext — first folder = userId for delete policy
+      const path = `${user.id}/${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage.from('certificates').upload(path, file);
       if (uploadError) throw uploadError;
@@ -224,9 +224,10 @@ function CertificatesTab() {
       toast.success('Certificado enviado! Aguardando análise.');
       await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
       await fetchCerts();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error('Erro ao enviar certificado.');
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Erro ao enviar certificado: ${msg}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
