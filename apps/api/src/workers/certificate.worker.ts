@@ -16,32 +16,41 @@ interface ExtractedCertData {
   hours: number | null
 }
 
-const EXTRACTION_PROMPT = `Você é um extrator de dados de certificados de treinamento.
-Analise o certificado e retorne um JSON com exatamente estes campos:
+const EXTRACTION_PROMPT = `Você é um extrator de dados de certificados de treinamento. Sua tarefa é ler o certificado e retornar um JSON estruturado com as informações encontradas.
+
+Retorne APENAS este JSON (sem texto, sem markdown, sem explicações):
 {
-  "employee_name": "Nome completo do colaborador/participante",
-  "course_name": "Nome do curso ou treinamento",
-  "completion_date": "YYYY-MM-DD (data de conclusão/emissão)",
-  "expiry_date": "YYYY-MM-DD (data de vencimento/validade, se houver)",
-  "hours": 8 (carga horária como número, se houver)
+  "employee_name": "Nome completo do participante/colaborador que recebeu o certificado",
+  "course_name": "Nome exato do curso, treinamento ou habilitação",
+  "completion_date": "YYYY-MM-DD",
+  "expiry_date": "YYYY-MM-DD ou null",
+  "hours": 40
 }
 
-Regras:
+Instruções obrigatórias:
+- employee_name: nome do PARTICIPANTE, não da instituição emissora
+- course_name: nome do curso como está escrito, sem abreviações inventadas
+- completion_date: data de CONCLUSÃO ou EMISSÃO do certificado (use a data principal do documento)
+- expiry_date: data de VENCIMENTO/VALIDADE — se o certificado tiver "válido por N anos", some N anos à completion_date. Se não houver vencimento, use null
+- hours: carga horária como número inteiro. Se não houver, use null
+- Datas SEMPRE em formato YYYY-MM-DD
 - Se um campo não existir no certificado, use null
-- Datas SEMPRE no formato YYYY-MM-DD
-- hours SEMPRE como número inteiro (ex: 8, 40, 200)
-- Se a validade for informada em anos (ex: "validade 2 anos"), calcule a partir da data de emissão
-- Retorne APENAS o JSON, sem texto adicional`
+- Retorne SOMENTE o JSON, sem qualquer outro texto`
 
 async function extractFromImage(fileUrl: string): Promise<ExtractedCertData> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     max_tokens: 500,
+    temperature: 0, // deterministic — same image must always return same result
     messages: [
+      {
+        role: 'system',
+        content: EXTRACTION_PROMPT,
+      },
       {
         role: 'user',
         content: [
-          { type: 'text', text: EXTRACTION_PROMPT },
+          { type: 'text', text: 'Extraia os dados deste certificado:' },
           { type: 'image_url', image_url: { url: fileUrl, detail: 'high' } },
         ],
       },
@@ -53,15 +62,17 @@ async function extractFromImage(fileUrl: string): Promise<ExtractedCertData> {
 }
 
 async function extractFromPdf(fileBuffer: Buffer, fileName: string): Promise<ExtractedCertData> {
-  // Use LlamaParse to extract text, then GPT-4o to structure it
-  const text = await parseWithLlamaParse(fileBuffer, fileName)
+  // LlamaParse now returns LlamaPage[] — join all pages into full text
+  const pages = await parseWithLlamaParse(fileBuffer, fileName)
+  const fullText = pages.map(p => p.text).join('\n\n').slice(0, 8000)
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     max_tokens: 500,
+    temperature: 0,
     messages: [
       { role: 'system', content: EXTRACTION_PROMPT },
-      { role: 'user', content: `Conteúdo do certificado:\n\n${text.slice(0, 8000)}` },
+      { role: 'user', content: `Extraia os dados deste certificado:\n\n${fullText}` },
     ],
   })
 

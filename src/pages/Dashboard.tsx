@@ -24,6 +24,7 @@ import { ptBR } from 'date-fns/locale';
 
 interface DashboardMetrics {
   totalDocs: number;
+  totalCerts: number;
   totalConversations: number;
   totalMessages: number;
   expiringDocs: number; // expiry within 30 days
@@ -102,6 +103,7 @@ export default function Dashboard() {
       const certs = certsRes.data ?? [];
       setMetrics({
         totalDocs: (docsRes.data as unknown as number) ?? 0,
+        totalCerts: certs.length,
         totalConversations: convsRes.count ?? 0,
         totalMessages: msgsRes.count ?? 0,
         expiringDocs: expiringRes.data?.length ?? 0,
@@ -182,14 +184,14 @@ export default function Dashboard() {
           {/* Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              label="Documentos"
+              label="Docs. RAG indexados"
               value={metrics?.totalDocs}
               icon={<FileText className="h-5 w-5 text-blue-500" />}
               loading={loading}
             />
             <MetricCard
-              label="Certificados aprovados"
-              value={metrics?.approvedDocs}
+              label="Certificados"
+              value={metrics?.totalCerts}
               icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
               loading={loading}
             />
