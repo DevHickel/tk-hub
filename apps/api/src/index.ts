@@ -90,7 +90,7 @@ app.use('*', async (c, next) => {
 
   // Dados do usuário verificados — disponíveis nas rotas via c.get()
   c.set('userId', user.id)
-  c.set('userEmail', user.email)
+  c.set('userEmail', user.email ?? '')
   c.set('userRole', (profile?.role as string) ?? 'user')
 
   await next()
