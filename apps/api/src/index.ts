@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js'
 import { ragRoutes } from './routes/rag.routes.js'
 import { dmsRoutes } from './routes/dms.routes.js'
 import { reportsRoutes } from './routes/reports.routes.js'
+import { certificatesRoutes } from './routes/certificates.routes.js'
 import { setupWorkers } from './workers/index.js'
 import { setupCron } from './services/cron.service.js'
 import { setupReportCron } from './services/reports/report.cron.js'
@@ -103,6 +104,7 @@ app.get('/health', (c) => c.json({ ok: true, ts: new Date().toISOString() }))
 app.route('/api', ragRoutes)
 app.route('/api', dmsRoutes)
 app.route('/api', reportsRoutes)
+app.route('/api', certificatesRoutes)
 
 // ── Iniciar workers BullMQ + Crons ────────────────────────────────────────────
 setupWorkers()

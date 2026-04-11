@@ -71,10 +71,12 @@ interface Certificate {
 
 
 const CERT_STATUS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
-  approved: { label: 'Aprovado', variant: 'default', icon: <CheckCircle2 className="h-3 w-3" /> },
-  pending:  { label: 'Pendente', variant: 'secondary', icon: <Clock className="h-3 w-3" /> },
-  rejected: { label: 'Rejeitado', variant: 'destructive', icon: <XCircle className="h-3 w-3" /> },
-  expired:  { label: 'Vencido', variant: 'outline', icon: <AlertTriangle className="h-3 w-3" /> },
+  approved:   { label: 'Aprovado', variant: 'default', icon: <CheckCircle2 className="h-3 w-3" /> },
+  pending:    { label: 'Pendente', variant: 'secondary', icon: <Clock className="h-3 w-3" /> },
+  processing: { label: 'Extraindo...', variant: 'secondary', icon: <Loader2 className="h-3 w-3 animate-spin" /> },
+  rejected:   { label: 'Rejeitado', variant: 'destructive', icon: <XCircle className="h-3 w-3" /> },
+  expired:    { label: 'Vencido', variant: 'outline', icon: <AlertTriangle className="h-3 w-3" /> },
+  error:      { label: 'Erro', variant: 'destructive', icon: <XCircle className="h-3 w-3" /> },
 };
 
 const RAG_STATUS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -213,15 +215,26 @@ function CertificatesTab() {
 
       const { data: { publicUrl } } = supabase.storage.from('certificates').getPublicUrl(path);
 
-      const { error: dbError } = await supabase.from('processed_certificates').insert({
-        file_name: file.name,
-        file_url: publicUrl,
-        status: 'pending',
-        org_id: null,
-      });
+      const { data: certRow, error: dbError } = await supabase
+        .from('processed_certificates')
+        .insert({ file_name: file.name, file_url: publicUrl, status: 'pending', org_id: null })
+        .select('id')
+        .single();
       if (dbError) throw dbError;
 
-      toast.success('Certificado enviado! Aguardando análise.');
+      // Trigger background AI extraction
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = import.meta.env.VITE_API_URL;
+      await fetch(`${apiUrl}/api/certificates/${certRow.id}/extract`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_url: publicUrl, file_name: file.name }),
+      });
+
+      toast.success('Certificado enviado! Extraindo dados automaticamente...');
       await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
       await fetchCerts();
     } catch (err: unknown) {
