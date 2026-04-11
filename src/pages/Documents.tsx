@@ -45,6 +45,8 @@ import {
   ChevronRight,
   FileCheck,
   Loader2,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -66,14 +68,6 @@ interface Certificate {
   created_at: string | null;
 }
 
-interface RagDocument {
-  id: string | number;
-  file_name: string | null;
-  status: string | null;
-  source: string | null;
-  created_at: string | null;
-  uploaded_by: string | null;
-}
 
 const CERT_STATUS: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: React.ReactNode }> = {
   approved: { label: 'Aprovado', variant: 'default', icon: <CheckCircle2 className="h-3 w-3" /> },
@@ -421,40 +415,59 @@ function CertificatesTab() {
 
 // ─── RAG Documents Tab ───────────────────────────────────────────────────────
 
+interface GroupedRagDoc {
+  source_name: string;
+  file_name: string | null;
+  status: string | null;
+  source: string | null;
+  created_at: string | null;
+  chunk_count: number;
+  ids: number[];
+}
+
 function RagTab() {
   const { user } = useAuth();
-  const [docs, setDocs] = useState<RagDocument[]>([]);
+  const [docs, setDocs] = useState<GroupedRagDoc[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [deletingSource, setDeletingSource] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setPage(0); }, [search]);
-  useEffect(() => { fetchDocs(); }, [page, search]);
+  useEffect(() => { fetchDocs(); }, [search]);
 
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('documents')
-        .select('id, file_name, status, source, created_at, uploaded_by', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      if (search.trim()) {
-        query = query.ilike('file_name', `%${search}%`);
-      }
-
-      const { data, count, error } = await query;
+      const { data, error } = await supabase.rpc('list_rag_documents');
       if (error) throw error;
-      setDocs((data as RagDocument[]) ?? []);
-      setTotal(count ?? 0);
+      const all = (data as GroupedRagDoc[]) ?? [];
+      const filtered = search.trim()
+        ? all.filter(d => d.source_name.toLowerCase().includes(search.toLowerCase()))
+        : all;
+      setDocs(filtered);
+      setTotal(filtered.length);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (doc: GroupedRagDoc) => {
+    if (!confirm(`Excluir "${doc.source_name}" e todos os seus ${doc.chunk_count} chunks? Esta ação não pode ser desfeita.`)) return;
+    setDeletingSource(doc.source_name);
+    try {
+      const { error } = await supabase.from('documents').delete().in('id', doc.ids);
+      if (error) throw error;
+      toast.success('Documento excluído com sucesso.');
+      await fetchDocs();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao excluir documento.');
+    } finally {
+      setDeletingSource(null);
     }
   };
 
@@ -503,8 +516,6 @@ function RagTab() {
     }
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-
   return (
     <div className="space-y-4">
       <Card>
@@ -519,6 +530,9 @@ function RagTab() {
                 className="pl-9"
               />
             </div>
+            <Button variant="outline" size="icon" onClick={fetchDocs} disabled={loading} title="Atualizar lista">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {uploading ? 'Enviando...' : 'Enviar PDF'}
@@ -543,23 +557,24 @@ function RagTab() {
             <TableHeader>
               <TableRow>
                 <TableHead>Arquivo</TableHead>
-                <TableHead>Origem</TableHead>
+                <TableHead>Chunks</TableHead>
                 <TableHead>Enviado em</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-20">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 4 }).map((_, j) => (
+                    {Array.from({ length: 5 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : docs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-16 text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
                     <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     Nenhum documento RAG encontrado.<br />
                     <span className="text-xs">Envie um PDF para que o Assistente IA possa usá-lo como referência.</span>
@@ -567,21 +582,34 @@ function RagTab() {
                 </TableRow>
               ) : (
                 docs.map((doc) => {
-                  const cfg = RAG_STATUS[doc.status ?? ''] ?? { label: doc.status ?? '—', variant: 'outline' as const };
+                  const cfg = RAG_STATUS[doc.status ?? 'active'] ?? { label: 'Ativo', variant: 'default' as const };
+                  const isDeleting = deletingSource === doc.source_name;
                   return (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium max-w-[300px] truncate">
+                    <TableRow key={doc.source_name}>
+                      <TableCell className="font-medium max-w-[300px]">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                          {doc.file_name ?? '—'}
+                          <span className="truncate">{doc.source_name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground capitalize">{doc.source ?? 'upload'}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">{doc.chunk_count} chunk{doc.chunk_count !== 1 ? 's' : ''}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
                         {doc.created_at ? format(new Date(doc.created_at), 'dd/MM/yyyy HH:mm') : '—'}
                       </TableCell>
                       <TableCell>
                         <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDelete(doc)}
+                          disabled={isDeleting}
+                          title="Excluir documento e todos os chunks"
+                        >
+                          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -591,20 +619,6 @@ function RagTab() {
           </Table>
         </CardContent>
       </Card>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Página {page + 1} de {totalPages} ({total} registros)</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

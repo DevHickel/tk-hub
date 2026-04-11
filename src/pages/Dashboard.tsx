@@ -80,7 +80,7 @@ export default function Dashboard() {
         activityRes,
         expiringRes,
       ] = await Promise.all([
-        supabase.from('documents').select('id', { count: 'exact', head: true }),
+        supabase.rpc('count_rag_documents'),
         supabase.from('conversations').select('id', { count: 'exact', head: true }),
         supabase.from('messages').select('id', { count: 'exact', head: true }),
         supabase.from('processed_certificates').select('status'),
@@ -101,7 +101,7 @@ export default function Dashboard() {
 
       const certs = certsRes.data ?? [];
       setMetrics({
-        totalDocs: docsRes.count ?? 0,
+        totalDocs: (docsRes.data as unknown as number) ?? 0,
         totalConversations: convsRes.count ?? 0,
         totalMessages: msgsRes.count ?? 0,
         expiringDocs: expiringRes.data?.length ?? 0,
