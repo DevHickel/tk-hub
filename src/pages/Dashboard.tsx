@@ -16,6 +16,8 @@ import {
   Users,
   ArrowRight,
   TrendingUp,
+  MessageSquare,
+  Shield,
 } from 'lucide-react';
 import { format, formatDistanceToNow, addDays, isAfter, isBefore } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -77,7 +79,7 @@ export default function Dashboard() {
         activityRes,
         expiringRes,
       ] = await Promise.all([
-        supabase.from('documents').select('id', { count: 'exact', head: true }),
+        supabase.from('processed_certificates').select('id', { count: 'exact', head: true }),
         supabase.from('conversations').select('id', { count: 'exact', head: true }),
         supabase.from('messages').select('id', { count: 'exact', head: true }),
         supabase.from('processed_certificates').select('status'),
@@ -147,10 +149,39 @@ export default function Dashboard() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Quick actions */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Ações rápidas</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3">
+              <Button asChild>
+                <Link to="/chat">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Abrir Assistente
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/documents">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Ver Documentos
+                </Link>
+              </Button>
+              {isAdmin && (
+                <Button variant="outline" asChild>
+                  <Link to="/admin">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Painel Admin
+                  </Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
-              label="Documentos RAG"
+              label="Documentos"
               value={metrics?.totalDocs}
               icon={<FileText className="h-5 w-5 text-blue-500" />}
               loading={loading}
@@ -286,34 +317,6 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Quick actions */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Ações rápidas</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link to="/chat">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Abrir Assistente
-                </Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link to="/documents">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Ver Documentos
-                </Link>
-              </Button>
-              {isAdmin && (
-                <Button variant="outline" asChild>
-                  <Link to="/admin">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Painel Admin
-                  </Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
         </main>
       </div>
     </div>
