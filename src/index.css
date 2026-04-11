@@ -1,104 +1,117 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@300;400;500;600;700&display=swap');
+/* Leelawadee UI — fonte oficial da TK Solution (manual de identidade visual) */
+/* Leelawadee UI é fonte de sistema Windows; Inter é o fallback web */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* TK Solution Design System - Black #000000, White #FFFFFF, Gray #808080 */
+/*
+  TK Solution Design System
+  Paleta oficial (manual de identidade visual):
+    Preto:  #000000
+    Azul:   #004C97  → HSL 210 100% 30%
+    Branco: #FFFFFF
+    Cinza:  #808080  → HSL 0 0% 50%
+  Tipografia: Leelawadee UI Bold (títulos) / Regular (corpo)
+*/
 
 @layer base {
   :root {
+    /* Backgrounds */
     --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
+    --foreground: 0 0% 4%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
+    --card-foreground: 0 0% 4%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
+    --popover-foreground: 0 0% 4%;
 
-    --primary: 0 0% 0%;
+    /* Azul TK Solution #004C97 como cor primária */
+    --primary: 210 100% 30%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 0%;
+    --secondary-foreground: 0 0% 9%;
 
     --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 50%;
+    --muted-foreground: 0 0% 45%;
 
-    --accent: 0 0% 96%;
-    --accent-foreground: 0 0% 0%;
+    --accent: 210 100% 96%;
+    --accent-foreground: 210 100% 30%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 0%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 210 100% 30%;
 
-    --radius: 0.5rem;
+    --radius: 0.375rem;
 
-    /* Chat colors */
-    --chat-user: 0 0% 0%;
+    /* Chat */
+    --chat-user: 210 100% 30%;
     --chat-user-foreground: 0 0% 100%;
     --chat-ai: 0 0% 96%;
-    --chat-ai-foreground: 0 0% 0%;
+    --chat-ai-foreground: 0 0% 4%;
 
     /* Sidebar */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 0 0% 0%;
+    --sidebar-primary: 210 100% 30%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 94%;
-    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-accent: 210 100% 95%;
+    --sidebar-accent-foreground: 210 100% 30%;
     --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 0 0% 0%;
+    --sidebar-ring: 210 100% 30%;
   }
 
   .dark {
     --background: 0 0% 5%;
-    --foreground: 0 0% 100%;
+    --foreground: 0 0% 98%;
 
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 100%;
+    --card: 0 0% 9%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 0%;
+    /* Azul mais claro no dark para contraste */
+    --primary: 210 90% 55%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary-foreground: 0 0% 98%;
 
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 60%;
 
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 210 50% 18%;
+    --accent-foreground: 210 90% 70%;
 
-    --destructive: 0 62% 30%;
+    --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 210 90% 55%;
 
-    /* Chat colors dark */
-    --chat-user: 0 0% 25%;
+    /* Chat dark */
+    --chat-user: 210 50% 22%;
     --chat-user-foreground: 0 0% 100%;
-    --chat-ai: 0 0% 15%;
-    --chat-ai-foreground: 0 0% 100%;
+    --chat-ai: 0 0% 13%;
+    --chat-ai-foreground: 0 0% 98%;
 
     /* Sidebar dark */
-    --sidebar-background: 0 0% 8%;
-    --sidebar-foreground: 0 0% 90%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 0 0% 100%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 85%;
+    --sidebar-primary: 210 90% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 50% 15%;
+    --sidebar-accent-foreground: 210 90% 70%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 210 90% 55%;
   }
 }
 
@@ -109,12 +122,13 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Noto Sans', 'Leelawadee UI', sans-serif;
+    /* Leelawadee UI primeiro (Windows/sistema) → Inter (web fallback) */
+    font-family: 'Leelawadee UI', 'Inter', -apple-system, sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Noto Sans', 'Leelawadee UI', sans-serif;
-    font-weight: 600;
+    font-family: 'Leelawadee UI', 'Inter', -apple-system, sans-serif;
+    font-weight: 700;
   }
 }
 

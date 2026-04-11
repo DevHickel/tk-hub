@@ -1,0 +1,43 @@
+module.exports = {
+  apps: [
+    {
+      name: 'api',
+      cwd: './apps/api',
+      script: 'dist/index.js',
+      node_args: '--experimental-vm-modules',
+      instances: 1,
+      exec_mode: 'fork',
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+      },
+      max_memory_restart: '512M',
+      error_file: './logs/api-error.log',
+      out_file: './logs/api-out.log',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
+    {
+      name: 'web',
+      script: 'npx',
+      args: 'serve dist -s -l 4000',
+      cwd: './',
+      env_production: { NODE_ENV: 'production' },
+      max_memory_restart: '256M',
+      error_file: './logs/web-error.log',
+      out_file: './logs/web-out.log',
+    },
+    {
+      name: 'worker',
+      cwd: './apps/api',
+      script: 'dist/workers/index.js',
+      instances: 1,
+      exec_mode: 'fork',
+      env_production: { NODE_ENV: 'production' },
+      max_memory_restart: '512M',
+      error_file: './logs/worker-error.log',
+      out_file: './logs/worker-out.log',
+      merge_logs: true,
+    },
+  ],
+}

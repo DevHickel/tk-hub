@@ -1,0 +1,587 @@
+import { useState, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
+import { api, type ReportConfig, type ReportRecipient } from '@/lib/api'
+import { Logo } from '@/components/Logo'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useToast } from '@/hooks/use-toast'
+import {
+  TrendingUp,
+  MessageSquare,
+  FileText,
+  Shield,
+  Bug,
+  Settings,
+  LogOut,
+  BarChart3,
+  Users,
+  Sliders,
+  Trash2,
+  Plus,
+  Send,
+  Clock,
+  Search,
+  Mail,
+} from 'lucide-react'
+
+const REPORT_TYPE_LABELS: Record<string, string> = {
+  management: 'Gestão',
+  hr: 'RH',
+  it: 'TI',
+  all: 'Todos',
+}
+
+const REPORT_TYPE_COLORS: Record<string, string> = {
+  management: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  hr: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  it: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+  all: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+}
+
+// ── Defaults (mirrors DEFAULT_BENCHMARKS in hours.calculator.ts) ──────────────
+const DEFAULTS: Required<Omit<ReportConfig, 'id' | 'updated_at'>> = {
+  language: 'pt',
+  hour_cost_brl: 35,
+  benchmark_search_min: 8,
+  benchmark_doc_process_min: 25,
+  benchmark_alert_min: 5,
+  benchmark_email_triage_min: 10,
+}
+
+function calcPreview(cfg: typeof DEFAULTS) {
+  // Exemplo semanal hipotético: 50 buscas, 20 docs, 10 alertas, 15 emails
+  const sample = { searches: 50, docs: 20, alerts: 10, emails: 15 }
+  const minutes =
+    sample.searches * cfg.benchmark_search_min +
+    sample.docs * cfg.benchmark_doc_process_min +
+    sample.alerts * cfg.benchmark_alert_min +
+    sample.emails * cfg.benchmark_email_triage_min
+  const hours = minutes / 60
+  const value = hours * cfg.hour_cost_brl
+  return { hours: hours.toFixed(1), value: value.toFixed(2) }
+}
+
+// ── Sidebar shared component ─────────────────────────────────────────────────
+function Sidebar({
+  isAdmin,
+  onSignOut,
+}: {
+  isAdmin: boolean
+  onSignOut: () => void
+}) {
+  const navItem = (to: string, icon: React.ReactNode, label: string, active = false) => (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+        active
+          ? 'bg-[#004C97]/10 text-[#004C97] dark:text-blue-400 font-semibold'
+          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {icon}
+      {label}
+    </Link>
+  )
+
+  return (
+    <aside className="w-64 border-r bg-card flex flex-col">
+      <div className="p-4 border-b">
+        <Logo className="h-8 w-auto" />
+      </div>
+      <nav className="flex-1 p-3 space-y-1">
+        {navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
+        {navItem('/chat', <MessageSquare className="h-4 w-4" />, 'Assistente IA')}
+        {navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
+        {isAdmin &&
+          navItem('/admin', <Shield className="h-4 w-4" />, 'Admin')}
+        {navItem('/bug-report', <Bug className="h-4 w-4" />, 'Reportar Bug')}
+        {navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios', true)}
+      </nav>
+      <div className="p-3 border-t space-y-1">
+        {navItem('/settings', <Settings className="h-4 w-4" />, 'Configurações')}
+        <button
+          onClick={onSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground text-sm transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Sair
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+// ── Tab 1: Destinatários ─────────────────────────────────────────────────────
+function RecipientsTab({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient()
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ email: '', name: '', report_type: 'management' as ReportRecipient['report_type'] })
+
+  const { data: recipients = [], isLoading } = useQuery({
+    queryKey: ['report-recipients'],
+    queryFn: () => api.listRecipients(),
+  })
+
+  const addMutation = useMutation({
+    mutationFn: () => api.addRecipient(form),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-recipients'] })
+      setOpen(false)
+      setForm({ email: '', name: '', report_type: 'management' })
+      toast({ title: 'Destinatário adicionado' })
+    },
+    onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteRecipient(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-recipients'] })
+      toast({ title: 'Destinatário removido' })
+    },
+    onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
+  })
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            {recipients.length} destinatário{recipients.length !== 1 ? 's' : ''} cadastrado{recipients.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        {canEdit && (
+          <Button size="sm" onClick={() => setOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Adicionar
+          </Button>
+        )}
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>
+          ) : recipients.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              Nenhum destinatário cadastrado.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-xs text-muted-foreground">
+                  <th className="px-4 py-3 text-left font-medium">Nome</th>
+                  <th className="px-4 py-3 text-left font-medium">E-mail</th>
+                  <th className="px-4 py-3 text-left font-medium">Tipo</th>
+                  {canEdit && <th className="px-4 py-3" />}
+                </tr>
+              </thead>
+              <tbody>
+                {recipients.map((r) => (
+                  <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
+                    <td className="px-4 py-3 font-medium">{r.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${REPORT_TYPE_COLORS[r.report_type]}`}>
+                        {REPORT_TYPE_LABELS[r.report_type]}
+                      </span>
+                    </td>
+                    {canEdit && (
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteMutation.mutate(r.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal adicionar destinatário */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar destinatário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Nome</Label>
+              <Input
+                placeholder="João Silva"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-mail</Label>
+              <Input
+                type="email"
+                placeholder="joao@tksolution.com.br"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tipo de relatório</Label>
+              <Select
+                value={form.report_type}
+                onValueChange={(v) => setForm((f) => ({ ...f, report_type: v as ReportRecipient['report_type'] }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="management">Gestão</SelectItem>
+                  <SelectItem value="hr">RH</SelectItem>
+                  <SelectItem value="it">TI</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => addMutation.mutate()}
+              disabled={!form.email || !form.name || addMutation.isPending}
+            >
+              {addMutation.isPending ? 'Salvando...' : 'Adicionar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ── Tab 2: Benchmarks ────────────────────────────────────────────────────────
+function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient()
+  const { toast } = useToast()
+
+  const { data: remote } = useQuery({
+    queryKey: ['report-config'],
+    queryFn: () => api.getReportConfig(),
+  })
+
+  const [cfg, setCfg] = useState<typeof DEFAULTS>(DEFAULTS)
+
+  // Sync remote → local when loaded
+  useEffect(() => {
+    if (remote) {
+      setCfg({
+        language: remote.language ?? DEFAULTS.language,
+        hour_cost_brl: remote.hour_cost_brl ?? DEFAULTS.hour_cost_brl,
+        benchmark_search_min: remote.benchmark_search_min ?? DEFAULTS.benchmark_search_min,
+        benchmark_doc_process_min: remote.benchmark_doc_process_min ?? DEFAULTS.benchmark_doc_process_min,
+        benchmark_alert_min: remote.benchmark_alert_min ?? DEFAULTS.benchmark_alert_min,
+        benchmark_email_triage_min: remote.benchmark_email_triage_min ?? DEFAULTS.benchmark_email_triage_min,
+      })
+    }
+  }, [remote])
+
+  const saveMutation = useMutation({
+    mutationFn: () => api.updateReportConfig(cfg),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-config'] })
+      toast({ title: 'Benchmarks salvos' })
+    },
+    onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
+  })
+
+  const preview = calcPreview(cfg)
+
+  const field = (
+    label: string,
+    key: keyof typeof DEFAULTS,
+    unit: string,
+    icon: React.ReactNode,
+    min = 1,
+    max = 120,
+  ) => (
+    <div className="space-y-1.5">
+      <Label className="flex items-center gap-1.5">
+        {icon}
+        {label}
+        <span className="text-muted-foreground font-normal">({unit})</span>
+      </Label>
+      <Input
+        type="number"
+        min={min}
+        max={max}
+        value={cfg[key] as number}
+        onChange={(e) => setCfg((c) => ({ ...c, [key]: Number(e.target.value) }))}
+        disabled={!canEdit}
+        className="w-32"
+      />
+    </div>
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Benchmarks form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Sliders className="h-4 w-4" />
+              Tempo manual estimado por ação
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Minutos que um colaborador levaria para executar cada ação sem a IA.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {field('Busca de informação', 'benchmark_search_min', 'min', <Search className="h-3.5 w-3.5 text-blue-500" />)}
+            {field('Catalogar documento', 'benchmark_doc_process_min', 'min', <FileText className="h-3.5 w-3.5 text-green-500" />, 1, 120)}
+            {field('Enviar alerta', 'benchmark_alert_min', 'min', <Clock className="h-3.5 w-3.5 text-amber-500" />)}
+            {field('Triar e-mail com anexo', 'benchmark_email_triage_min', 'min', <Mail className="h-3.5 w-3.5 text-purple-500" />)}
+            <div className="space-y-1.5 pt-2 border-t">
+              {field('Custo-hora colaborador', 'hour_cost_brl', 'R$', <BarChart3 className="h-3.5 w-3.5 text-rose-500" />, 1, 1000)}
+            </div>
+            {canEdit && (
+              <Button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+                className="mt-2"
+              >
+                {saveMutation.isPending ? 'Salvando...' : 'Salvar benchmarks'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Live preview */}
+        <Card className="bg-muted/40">
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Preview semanal (exemplo)
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Simulação com 50 buscas, 20 documentos, 10 alertas, 15 e-mails.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-2 border-b">
+                <span className="text-sm text-muted-foreground">Horas economizadas</span>
+                <span className="text-2xl font-bold">{preview.hours}h</span>
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-muted-foreground">Valor economizado</span>
+                <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  R$ {Number(preview.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground bg-background rounded-md p-3">
+              <strong>Como é calculado:</strong> soma dos minutos poupados em cada ação × custo-hora do colaborador.
+              Os dados reais do período são coletados automaticamente no banco toda semana.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ── Tab 3: Preferências ──────────────────────────────────────────────────────
+function PreferencesTab({ canEdit }: { canEdit: boolean }) {
+  const qc = useQueryClient()
+  const { toast } = useToast()
+
+  const { data: remote } = useQuery({
+    queryKey: ['report-config'],
+    queryFn: () => api.getReportConfig(),
+  })
+
+  const [language, setLanguage] = useState<'pt' | 'en'>('pt')
+
+  useEffect(() => {
+    if (remote?.language) setLanguage(remote.language as 'pt' | 'en')
+  }, [remote])
+
+  const saveLangMutation = useMutation({
+    mutationFn: () => api.updateReportConfig({ language }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['report-config'] })
+      toast({ title: 'Preferências salvas' })
+    },
+    onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
+  })
+
+  const testMutation = useMutation({
+    mutationFn: () => api.sendTestReport(),
+    onSuccess: (data) => toast({ title: 'Relatório de teste enviado', description: data.message }),
+    onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
+  })
+
+  return (
+    <div className="space-y-6 max-w-xl">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold">Idioma dos relatórios</CardTitle>
+          <CardDescription className="text-xs">
+            Idioma usado nos assuntos e templates dos e-mails.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Select
+            value={language}
+            onValueChange={(v) => setLanguage(v as 'pt' | 'en')}
+            disabled={!canEdit}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pt">Português (BR)</SelectItem>
+              <SelectItem value="en">English</SelectItem>
+            </SelectContent>
+          </Select>
+          {canEdit && (
+            <Button size="sm" onClick={() => saveLangMutation.mutate()} disabled={saveLangMutation.isPending}>
+              {saveLangMutation.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Send className="h-4 w-4" />
+            Relatório de teste
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Envia os 3 relatórios agora com os dados da última semana para todos os destinatários configurados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {canEdit ? (
+            <Button
+              variant="outline"
+              onClick={() => testMutation.mutate()}
+              disabled={testMutation.isPending}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {testMutation.isPending ? 'Enviando...' : 'Enviar agora'}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Apenas administradores e gestores podem enviar relatórios de teste.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="bg-muted/40">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Agendamento automático
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground space-y-1">
+          <p>Os relatórios são enviados automaticamente todo <strong>domingo às 00:00</strong> (horário de Brasília).</p>
+          <p>Não é necessário nenhuma ação manual.</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ── Página principal ─────────────────────────────────────────────────────────
+export default function ReportSettings() {
+  const { signOut, isAdmin, profile } = useAuth()
+  const navigate = useNavigate()
+
+  const canEdit = isAdmin || ['manager', 'tk_master'].includes((profile as { role?: string })?.role ?? '')
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/login')
+  }
+
+  return (
+    <div className="flex h-screen bg-background">
+      <Sidebar isAdmin={isAdmin} onSignOut={handleSignOut} />
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
+          <div>
+            <h1 className="text-lg font-semibold">Relatórios</h1>
+            <p className="text-xs text-muted-foreground">Destinatários, benchmarks e preferências</p>
+          </div>
+          <ThemeToggle />
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6">
+          <Tabs defaultValue="recipients">
+            <TabsList className="mb-6">
+              <TabsTrigger value="recipients" className="flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" />
+                Destinatários
+              </TabsTrigger>
+              <TabsTrigger value="benchmarks" className="flex items-center gap-1.5">
+                <Sliders className="h-3.5 w-3.5" />
+                Benchmarks
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="flex items-center gap-1.5">
+                <Settings className="h-3.5 w-3.5" />
+                Preferências
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="recipients">
+              <RecipientsTab canEdit={canEdit} />
+            </TabsContent>
+
+            <TabsContent value="benchmarks">
+              <BenchmarksTab canEdit={canEdit} />
+            </TabsContent>
+
+            <TabsContent value="preferences">
+              <PreferencesTab canEdit={canEdit} />
+            </TabsContent>
+          </Tabs>
+        </main>
+      </div>
+    </div>
+  )
+}

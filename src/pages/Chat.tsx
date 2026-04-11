@@ -297,25 +297,27 @@ export default function Chat() {
       details: { conversation_id: conversationId }
     });
 
-    // Call n8n webhook
+    // Call backend RAG — POST /api/chat (mesmo contrato da Edge Function)
     try {
-      const response = await fetch('https://n8n.vetorix.com.br/webhook/TkSolution', {
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${apiUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           message: content,
-          user_id: user.id,
           conversation_id: conversationId,
         }),
       });
 
       let aiResponse = 'Desculpe, não consegui processar sua mensagem.';
-      
+
       if (response.ok) {
         const data = await response.json();
-        aiResponse = data.response || data.message || data.output || aiResponse;
+        aiResponse = data.response || aiResponse;
       }
 
       // Add AI message

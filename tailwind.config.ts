@@ -14,9 +14,17 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["'Noto Sans'", "'Leelawadee UI'", "sans-serif"],
+        /* Leelawadee UI — fonte oficial TK Solution (manual de identidade) */
+        sans: ["'Leelawadee UI'", "'Inter'", "-apple-system", "sans-serif"],
       },
       colors: {
+        /* Paleta fixa da identidade visual TK Solution */
+        brand: {
+          blue:  "#004C97",
+          black: "#000000",
+          gray:  "#808080",
+          white: "#FFFFFF",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -1,3 +1,9 @@
+# Variáveis de ambiente — nunca commitar secrets
+.env
+.env.local
+.env.*.local
+apps/api/.env
+
 # Logs
 logs
 *.log

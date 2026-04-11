@@ -1,0 +1,138 @@
+import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { rateLimiter } from 'hono-rate-limiter'
+import { z } from 'zod'
+import * as Sentry from '@sentry/node'
+import type { AppVariables } from '../lib/context.js'
+import { supabase } from '../lib/supabase.js'
+import { generateAndSendReports, getReportConfig } from '../services/reports/report.service.js'
+import { safeLog } from '../lib/logger.js'
+
+export const reportsRoutes = new Hono<{ Variables: AppVariables }>()
+
+// Rate limit conservador para envio de relatórios — evita drenar créditos de email
+const sendTestRateLimiter = rateLimiter({
+  windowMs: 60 * 60 * 1000, // janela de 1 hora
+  limit: 3,                  // máx 3 envios de teste por hora por usuário
+  keyGenerator: (c) => (c.get('userId' as never) as string | undefined) ?? 'unknown',
+  message: { error: 'Limite de envio de relatórios atingido. Tente novamente em 1 hora.' },
+})
+
+// ── GET /api/reports/config ─────────────────────────────────────────────────
+reportsRoutes.get('/reports/config', async (c) => {
+  try {
+    const config = await getReportConfig()
+    return c.json(config)
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── PUT /api/reports/config ─────────────────────────────────────────────────
+const configSchema = z.object({
+  language:                 z.enum(['pt', 'en']).optional(),
+  hour_cost_brl:            z.number().min(1).max(1000).optional(),
+  benchmark_search_min:     z.number().int().min(1).max(120).optional(),
+  benchmark_doc_process_min:z.number().int().min(1).max(120).optional(),
+  benchmark_alert_min:      z.number().int().min(1).max(60).optional(),
+  benchmark_email_triage_min:z.number().int().min(1).max(60).optional(),
+})
+
+reportsRoutes.put('/reports/config', zValidator('json', configSchema), async (c) => {
+  const userRole = c.get('userRole')
+  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  const body = c.req.valid('json')
+  try {
+    // Upsert — tabela tem apenas 1 linha
+    const { error } = await supabase
+      .from('report_config')
+      .upsert({ ...body, updated_at: new Date().toISOString() })
+    if (error) throw error
+    return c.json({ success: true })
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── GET /api/reports/recipients ─────────────────────────────────────────────
+reportsRoutes.get('/reports/recipients', async (c) => {
+  const { data } = await supabase
+    .from('report_recipients')
+    .select('*')
+    .order('created_at')
+  return c.json(data ?? [])
+})
+
+// ── POST /api/reports/recipients ────────────────────────────────────────────
+const recipientSchema = z.object({
+  email:       z.string().email(),
+  name:        z.string().min(2).max(200),
+  report_type: z.enum(['management', 'hr', 'it', 'all']),
+})
+
+reportsRoutes.post('/reports/recipients', zValidator('json', recipientSchema), async (c) => {
+  const userRole = c.get('userRole')
+  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  const body = c.req.valid('json')
+  try {
+    const { data, error } = await supabase
+      .from('report_recipients')
+      .insert(body)
+      .select()
+      .single()
+    if (error) throw error
+    return c.json(data, 201)
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── DELETE /api/reports/recipients/:id ──────────────────────────────────────
+reportsRoutes.delete('/reports/recipients/:id', async (c) => {
+  const userRole = c.get('userRole')
+  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  try {
+    await supabase.from('report_recipients').delete().eq('id', c.req.param('id'))
+    return c.json({ success: true })
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+// ── POST /api/reports/send-test ─────────────────────────────────────────────
+reportsRoutes.post('/reports/send-test', sendTestRateLimiter, async (c) => {
+  const userRole = c.get('userRole')
+  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  try {
+    const weekEnd   = new Date()
+    const weekStart = new Date(weekEnd)
+    weekStart.setDate(weekStart.getDate() - 7)
+
+    // Fire-and-forget para não travar o request
+    generateAndSendReports(weekStart, weekEnd).catch((err) => {
+      Sentry.captureException(err, { tags: { route: '/api/reports/send-test' } })
+    })
+
+    safeLog('info', 'Relatório de teste disparado', { userId: c.get('userId') })
+    return c.json({ success: true, message: 'Relatório de teste enviado para os destinatários configurados.' })
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})

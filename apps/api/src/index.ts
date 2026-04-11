@@ -1,0 +1,127 @@
+// Sentry PRIMEIRO — antes de qualquer import (backend/SKILL.md)
+import * as Sentry from '@sentry/node'
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? 'development',
+  tracesSampleRate: 0.2,
+})
+
+import { serve } from '@hono/node-server'
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
+import { secureHeaders } from 'hono/secure-headers'
+import { rateLimiter } from 'hono-rate-limiter'
+import { createClient } from '@supabase/supabase-js'
+import { ragRoutes } from './routes/rag.routes.js'
+import { dmsRoutes } from './routes/dms.routes.js'
+import { reportsRoutes } from './routes/reports.routes.js'
+import { setupWorkers } from './workers/index.js'
+import { setupCron } from './services/cron.service.js'
+import { setupReportCron } from './services/reports/report.cron.js'
+import type { AppVariables } from './lib/context.js'
+
+// Validar variáveis de ambiente obrigatórias na inicialização
+const REQUIRED_ENV = [
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_KEY',
+  'SUPABASE_ANON_KEY',
+  'OPENAI_API_KEY',
+  'REDIS_URL',
+  'ALLOWED_EMAIL_DOMAIN',
+  'FRONTEND_URL',
+]
+
+REQUIRED_ENV.forEach((key) => {
+  if (!process.env[key]) {
+    throw new Error(`Variável de ambiente ausente: ${key}`)
+  }
+})
+
+const app = new Hono<{ Variables: AppVariables }>()
+
+// Clients Supabase de nível de módulo (criados 1x, não por request)
+const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!)
+const supabaseAuth  = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
+
+// ── Headers de segurança (security/SKILL.md §6) ──────────────────────────────
+app.use('*', secureHeaders())
+
+// ── CORS restrito ao domínio do frontend ─────────────────────────────────────
+app.use(
+  '*',
+  cors({
+    origin: process.env.FRONTEND_URL!,
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    allowHeaders: ['Authorization', 'Content-Type'],
+    credentials: true,
+  })
+)
+
+// ── Rate limit geral — proteção DDoS (200 req/min por IP) ────────────────────
+app.use(
+  '*',
+  rateLimiter({
+    windowMs: 60 * 1000,
+    limit: 200,
+    keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown',
+    message: { error: 'Too many requests.' },
+  })
+)
+
+// ── Middleware de autenticação (backend/SKILL.md) ─────────────────────────────
+// Rotas que não passam pelo middleware de auth JWT
+const PUBLIC_PATHS = ['/health', '/api/webhook/gmail']
+
+app.use('*', async (c, next) => {
+  if (PUBLIC_PATHS.includes(c.req.path)) return next()
+
+  const token = c.req.header('Authorization')?.replace('Bearer ', '')
+  if (!token) return c.json({ error: 'Unauthorized' }, 401)
+
+  // Verificar token via Supabase Auth (anon key para não bypassar validação)
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token)
+  if (error || !user) return c.json({ error: 'Invalid token' }, 401)
+
+  // Verificar domínio de email autorizado (backend/SKILL.md)
+  const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN!
+  if (!user.email?.endsWith(`@${allowedDomain}`)) {
+    return c.json({ error: 'Unauthorized domain' }, 403)
+  }
+
+  // Buscar role da tabela profiles — nunca confiar em user_metadata (mutável pelo usuário)
+  // security/SKILL.md §1: autorização sempre vem de fonte confiável no banco
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  // Dados do usuário verificados — disponíveis nas rotas via c.get()
+  c.set('userId', user.id)
+  c.set('userEmail', user.email)
+  c.set('userRole', (profile?.role as string) ?? 'user')
+
+  await next()
+})
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/health', (c) => c.json({ ok: true, ts: new Date().toISOString() }))
+
+// ── Rotas ─────────────────────────────────────────────────────────────────────
+app.route('/api', ragRoutes)
+app.route('/api', dmsRoutes)
+app.route('/api', reportsRoutes)
+
+// ── Iniciar workers BullMQ + Crons ────────────────────────────────────────────
+setupWorkers()
+setupCron()
+setupReportCron()
+
+// ── Servidor ──────────────────────────────────────────────────────────────────
+const port = Number(process.env.PORT ?? 3000)
+
+serve({ fetch: app.fetch, port }, () => {
+  console.log(`[server] rodando na porta ${port}`)
+})
+
+export default app
