@@ -152,6 +152,7 @@ function CertificatesTab() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [expiryFilter, setExpiryFilter] = useState('all');
   const [selected, setSelected] = useState<Certificate | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setPage(0); }, [search, statusFilter, expiryFilter]);
@@ -247,6 +248,25 @@ function CertificatesTab() {
     }
   };
 
+  const handleDeleteCert = async (cert: Certificate, e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent opening the detail sheet
+    if (!confirm(`Excluir o certificado "${cert.file_name ?? cert.course_name}"? Esta ação não pode ser desfeita.`)) return;
+    setDeletingId(cert.id);
+    try {
+      const { error } = await supabase.from('processed_certificates').delete().eq('id', cert.id);
+      if (error) throw error;
+      if (selected?.id === cert.id) setSelected(null);
+      toast.success('Certificado excluído.');
+      if (user) await logActivity(user.id, 'certificate_deleted', { file_name: cert.file_name ?? cert.course_name ?? '' });
+      await fetchCerts();
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao excluir certificado.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const expiryBadge = (dateStr: string | null) => {
@@ -324,6 +344,7 @@ function CertificatesTab() {
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Carga (h)</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -337,7 +358,7 @@ function CertificatesTab() {
                 ))
               ) : certs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
                     <FileCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     Nenhum certificado encontrado.<br />
                     <span className="text-xs">Clique em "Enviar Certificado" para adicionar.</span>
@@ -346,6 +367,7 @@ function CertificatesTab() {
               ) : (
                 certs.map((cert) => {
                   const cfg = CERT_STATUS[cert.status ?? ''] ?? { label: cert.status ?? '—', variant: 'outline' as const, icon: null };
+                  const isDeleting = deletingId === cert.id;
                   return (
                     <TableRow key={cert.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(cert)}>
                       <TableCell className="font-medium">{cert.employee_name ?? '—'}</TableCell>
@@ -357,6 +379,18 @@ function CertificatesTab() {
                         <Badge variant={cfg.variant} className="flex items-center gap-1 w-fit">
                           {cfg.icon}{cfg.label}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={isDeleting}
+                          onClick={(e) => handleDeleteCert(cert, e)}
+                          title="Excluir certificado"
+                        >
+                          {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -415,6 +449,17 @@ function CertificatesTab() {
                     </a>
                   </Button>
                 )}
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  disabled={deletingId === selected.id}
+                  onClick={(e) => handleDeleteCert(selected, e)}
+                >
+                  {deletingId === selected.id
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <Trash2 className="h-4 w-4 mr-2" />}
+                  Excluir certificado
+                </Button>
                 {selected.created_at && (
                   <p className="text-xs text-muted-foreground text-center">
                     Processado em {format(new Date(selected.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
