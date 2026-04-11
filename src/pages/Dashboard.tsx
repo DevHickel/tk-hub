@@ -49,7 +49,7 @@ interface ExpiringCert {
 }
 
 export default function Dashboard() {
-  const { user, profile, signOut, isAdmin } = useAuth();
+  const { user, profile, signOut, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -58,12 +58,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (authLoading) return;
     if (!user) {
       navigate('/login');
       return;
     }
     fetchDashboardData();
-  }, [user]);
+  }, [user, authLoading]);
 
   const fetchDashboardData = async () => {
     setLoading(true);

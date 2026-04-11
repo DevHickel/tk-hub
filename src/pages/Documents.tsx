@@ -95,10 +95,13 @@ const PAGE_SIZE = 20;
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function Documents() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => { if (!user) navigate('/login'); }, [user]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) navigate('/login');
+  }, [user, authLoading]);
 
   return (
     <div className="flex h-screen bg-background">

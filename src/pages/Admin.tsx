@@ -98,7 +98,7 @@ export default function Admin() {
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const isTkMaster = appRoles.includes('tk_master');
 
   // Hook para exclusão de usuário com cascade
@@ -207,13 +207,14 @@ export default function Admin() {
   });
 
   useEffect(() => {
+    if (authLoading) return; // wait for auth to resolve
     if (!isAdmin) {
       toast.error('Acesso negado');
-      navigate('/chat');
+      navigate('/dashboard');
       return;
     }
     fetchData();
-  }, [isAdmin, navigate]);
+  }, [isAdmin, authLoading, navigate]);
 
   const fetchData = async () => {
     setIsLoading(true);
