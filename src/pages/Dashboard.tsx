@@ -75,45 +75,53 @@ export default function Dashboard() {
 
       const [
         docsRes,
-        convsRes,
-        msgsRes,
         certsRes,
         activityRes,
-        expiringRes,
+        expiredRes,
       ] = await Promise.all([
         supabase.rpc('count_rag_documents'),
-        supabase.from('conversations').select('id', { count: 'exact', head: true }),
-        supabase.from('messages').select('id', { count: 'exact', head: true }),
-        supabase.from('processed_certificates').select('status'),
+        supabase.from('processed_certificates').select('status, employee_name'),
         supabase
           .from('activity_logs')
           .select('id, action, details, timestamp, profiles(full_name, email)')
           .order('timestamp', { ascending: false })
           .limit(8),
+        // Certs vencidos (expiry_date < hoje)
         supabase
           .from('processed_certificates')
           .select('id, employee_name, course_name, expiry_date, status')
           .not('expiry_date', 'is', null)
-          .gte('expiry_date', now.toISOString().split('T')[0])
-          .lte('expiry_date', in30Days.toISOString().split('T')[0])
-          .order('expiry_date', { ascending: true })
+          .lt('expiry_date', now.toISOString().split('T')[0])
+          .order('expiry_date', { ascending: false })
           .limit(5),
       ]);
 
       const certs = certsRes.data ?? [];
+      // "Analisados": employee_name preenchido (IA processou)
+      const analyzed = certs.filter((c) => c.employee_name != null);
+      // "Não analisados": employee_name ainda null (pendente de IA)
+      const notAnalyzed = certs.filter((c) => c.employee_name == null);
+      // Vencendo em 30 dias (não vencidos ainda)
+      const today = now.toISOString().split('T')[0];
+      const in30DaysStr = in30Days.toISOString().split('T')[0];
+      const expiringSoon = certs.filter((c) => {
+        const d = (c as { expiry_date?: string | null }).expiry_date;
+        return d && d >= today && d <= in30DaysStr;
+      });
+
       setMetrics({
         totalDocs: (docsRes.data as unknown as number) ?? 0,
-        totalCerts: certs.length,
-        totalConversations: convsRes.count ?? 0,
-        totalMessages: msgsRes.count ?? 0,
-        expiringDocs: expiringRes.data?.length ?? 0,
-        expiredDocs: certs.filter((c) => c.status === 'rejected' || c.status === 'expired').length,
-        pendingDocs: certs.filter((c) => c.status === 'pending').length,
-        approvedDocs: certs.filter((c) => c.status === 'approved').length,
+        totalCerts: analyzed.length,
+        totalConversations: 0,
+        totalMessages: 0,
+        expiringDocs: expiringSoon.length,
+        expiredDocs: (expiredRes.data?.length ?? 0),
+        pendingDocs: notAnalyzed.length,
+        approvedDocs: analyzed.length,
       });
 
       setRecentActivity((activityRes.data as RecentActivity[]) ?? []);
-      setExpiringCerts((expiringRes.data as ExpiringCert[]) ?? []);
+      setExpiringCerts((expiredRes.data as ExpiringCert[]) ?? []);
     } catch (err) {
       console.error('Error fetching dashboard:', err);
     } finally {
@@ -190,7 +198,7 @@ export default function Dashboard() {
               loading={loading}
             />
             <MetricCard
-              label="Certificados"
+              label="Certificados analisados"
               value={metrics?.totalCerts}
               icon={<CheckCircle2 className="h-5 w-5 text-green-500" />}
               loading={loading}
@@ -203,20 +211,21 @@ export default function Dashboard() {
               highlight={!!metrics?.expiringDocs}
             />
             <MetricCard
-              label="Conversas"
-              value={metrics?.totalConversations}
-              icon={<MessageSquare className="h-5 w-5 text-purple-500" />}
+              label="Aguardando análise"
+              value={metrics?.pendingDocs}
+              icon={<Clock className="h-5 w-5 text-orange-500" />}
               loading={loading}
+              highlight={!!metrics?.pendingDocs}
             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Expiring certs */}
+            {/* Expired certs */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-500" />
-                  Vencimentos próximos
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  Certificados vencidos
                 </CardTitle>
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/documents" className="text-xs flex items-center gap-1">
@@ -233,12 +242,12 @@ export default function Dashboard() {
                   </div>
                 ) : expiringCerts.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">
-                    Nenhum documento vencendo nos próximos 30 dias
+                    Nenhum certificado vencido
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {expiringCerts.map((cert) => {
-                      const days = cert.expiry_date ? daysUntilExpiry(cert.expiry_date) : null;
+                      const daysPast = cert.expiry_date ? Math.abs(daysUntilExpiry(cert.expiry_date)) : null;
                       return (
                         <div
                           key={cert.id}
@@ -252,15 +261,8 @@ export default function Dashboard() {
                               {cert.course_name ?? '—'}
                             </p>
                           </div>
-                          <Badge
-                            variant="outline"
-                            className={
-                              days !== null && days <= 7
-                                ? 'border-red-500 text-red-500'
-                                : 'border-amber-500 text-amber-500'
-                            }
-                          >
-                            {days !== null ? `${days}d` : '—'}
+                          <Badge variant="outline" className="border-red-500 text-red-500 shrink-0">
+                            {daysPast !== null ? `há ${daysPast}d` : '—'}
                           </Badge>
                         </div>
                       );
