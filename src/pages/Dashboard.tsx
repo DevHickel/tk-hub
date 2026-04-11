@@ -79,7 +79,7 @@ export default function Dashboard() {
         activityRes,
         expiringRes,
       ] = await Promise.all([
-        supabase.from('processed_certificates').select('id', { count: 'exact', head: true }),
+        supabase.from('documents').select('id', { count: 'exact', head: true }),
         supabase.from('conversations').select('id', { count: 'exact', head: true }),
         supabase.from('messages').select('id', { count: 'exact', head: true }),
         supabase.from('processed_certificates').select('status'),

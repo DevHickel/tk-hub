@@ -1,14 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { ChatMessage } from '@/components/chat/ChatMessage';
-import { ChatInput } from '@/components/chat/ChatInput';
+import { AppSidebar } from '@/components/AppSidebar';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import tkzinhoAvatar from '@/assets/tkzinho.jpg';
+import {
+  Plus,
+  Send,
+  Trash2,
+  Pin,
+  PinOff,
+  MoreHorizontal,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Message {
   id: string;
@@ -17,8 +38,6 @@ interface Message {
   conversation_id: string;
   created_at: string;
   feedback?: 'like' | 'dislike' | null;
-  feedbackCounts?: { positive: number; negative: number };
-  feedbackLoading?: boolean;
 }
 
 interface Conversation {
@@ -31,26 +50,24 @@ interface Conversation {
 export default function Chat() {
   const { user, profile, loading } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();
-  
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  
+  const [input, setInput] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/login');
-    }
+    if (!loading && !user) navigate('/login');
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (user) {
-      fetchConversations();
-    }
+    if (user) fetchConversations();
   }, [user]);
 
   useEffect(() => {
@@ -66,121 +83,31 @@ export default function Chat() {
   }, [messages]);
 
   const fetchConversations = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('conversations')
       .select('*')
       .eq('user_id', user?.id)
       .order('updated_at', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching conversations:', error);
-      return;
-    }
-
-    setConversations(data.map(c => ({
-      ...c,
-      is_pinned: c.is_pinned || c.pinned || false
-    })));
+    if (data) setConversations(data.map(c => ({ ...c, is_pinned: c.is_pinned || false })));
   };
 
   const fetchMessages = async (conversationId: string) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching messages:', error);
-      return;
-    }
-
-    // Build messages array and load feedbacks
-    const messagesData = data.map(m => ({
-      ...m,
-      role: m.role as 'user' | 'assistant'
-    }));
-
-    // Load existing feedbacks for AI messages
-    const messagesWithFeedback = await loadFeedbacksForMessages(messagesData);
-    setMessages(messagesWithFeedback);
-  };
-
-  const loadFeedbacksForMessages = async (messagesData: Message[]): Promise<Message[]> => {
-    const result: Message[] = [];
-    
-    for (let i = 0; i < messagesData.length; i++) {
-      const message = messagesData[i];
-      
-      if (message.role === 'assistant') {
-        // Find previous user message
-        let userMessage = '';
-        for (let j = i - 1; j >= 0; j--) {
-          if (messagesData[j].role === 'user') {
-            userMessage = messagesData[j].content;
-            break;
-          }
-        }
-        
-        // Fetch feedback from knowledge_feedback table
-        const { data: feedbackData } = await supabase
-          .from('knowledge_feedback')
-          .select('votos_positivos, votos_negativos')
-          .eq('pergunta_original', userMessage)
-          .eq('resposta_ia', message.content)
-          .maybeSingle();
-        
-        let feedback: 'like' | 'dislike' | null = null;
-        let feedbackCounts = { positive: 0, negative: 0 };
-        
-        if (feedbackData) {
-          // Atribuir valores reais do banco de dados
-          feedbackCounts = {
-            positive: feedbackData.votos_positivos || 0,
-            negative: feedbackData.votos_negativos || 0
-          };
-          
-          // Determinar qual botão destacar (baseado em votos existentes)
-          if (feedbackData.votos_positivos > 0) {
-            feedback = 'like';
-          } else if (feedbackData.votos_negativos > 0) {
-            feedback = 'dislike';
-          }
-        }
-        
-        result.push({ ...message, feedback, feedbackCounts });
-      } else {
-        result.push(message);
-      }
-    }
-    
-    return result;
+    if (data) setMessages(data.map(m => ({ ...m, role: m.role as 'user' | 'assistant' })));
   };
 
   const handleNewConversation = () => {
     setCurrentConversationId(null);
     setMessages([]);
-  };
-
-  const handleSelectConversation = (id: string) => {
-    setCurrentConversationId(id);
+    inputRef.current?.focus();
   };
 
   const handleDeleteConversation = async (id: string) => {
-    const { error } = await supabase
-      .from('conversations')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível excluir a conversa',
-      });
-      return;
-    }
-
+    await supabase.from('conversations').delete().eq('id', id);
     setConversations(prev => prev.filter(c => c.id !== id));
     if (currentConversationId === id) {
       setCurrentConversationId(null);
@@ -188,116 +115,47 @@ export default function Chat() {
     }
   };
 
-  const handleRenameConversation = async (id: string, title: string) => {
-    const { error } = await supabase
-      .from('conversations')
-      .update({ title })
-      .eq('id', id);
-
-    if (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível renomear a conversa',
-      });
-      return;
-    }
-
-    setConversations(prev => prev.map(c => 
-      c.id === id ? { ...c, title } : c
-    ));
-  };
-
   const handlePinConversation = async (id: string, pinned: boolean) => {
-    const { error } = await supabase
-      .from('conversations')
-      .update({ is_pinned: pinned, pinned: pinned })
-      .eq('id', id);
-
-    if (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível fixar a conversa',
-      });
-      return;
-    }
-
-    setConversations(prev => prev.map(c => 
-      c.id === id ? { ...c, is_pinned: pinned } : c
-    ));
+    await supabase.from('conversations').update({ is_pinned: pinned }).eq('id', id);
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, is_pinned: pinned } : c));
   };
 
-  const handleSendMessage = async (content: string) => {
-    if (!user) return;
+  const handleRenameSubmit = async (id: string) => {
+    if (!renameValue.trim()) { setRenamingId(null); return; }
+    await supabase.from('conversations').update({ title: renameValue.trim() }).eq('id', id);
+    setConversations(prev => prev.map(c => c.id === id ? { ...c, title: renameValue.trim() } : c));
+    setRenamingId(null);
+  };
 
+  const handleSend = async () => {
+    const content = input.trim();
+    if (!content || isLoading || !user) return;
+    setInput('');
     setIsLoading(true);
-    
+
     let conversationId = currentConversationId;
 
-    // Create conversation if it doesn't exist
     if (!conversationId) {
-      const { data: newConv, error: convError } = await supabase
+      const { data: newConv } = await supabase
         .from('conversations')
-        .insert({
-          user_id: user.id,
-          title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
-        })
+        .insert({ user_id: user.id, title: content.slice(0, 50) + (content.length > 50 ? '...' : '') })
         .select()
         .single();
-
-      if (convError) {
-        toast({
-          variant: 'destructive',
-          title: 'Erro',
-          description: 'Não foi possível criar a conversa',
-        });
-        setIsLoading(false);
-        return;
-      }
-
+      if (!newConv) { setIsLoading(false); return; }
       conversationId = newConv.id;
       setCurrentConversationId(conversationId);
-      setConversations(prev => [{
-        ...newConv,
-        is_pinned: false
-      }, ...prev]);
+      setConversations(prev => [{ ...newConv, is_pinned: false }, ...prev]);
     }
 
-    // Add user message
-    const { data: userMsg, error: userMsgError } = await supabase
+    const { data: userMsg } = await supabase
       .from('messages')
-      .insert({
-        conversation_id: conversationId,
-        content,
-        role: 'user',
-      })
+      .insert({ conversation_id: conversationId, content, role: 'user' })
       .select()
       .single();
+    if (userMsg) setMessages(prev => [...prev, { ...userMsg, role: 'user' as const }]);
 
-    if (userMsgError) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível enviar a mensagem',
-      });
-      setIsLoading(false);
-      return;
-    }
+    await supabase.from('activity_logs').insert({ user_id: user.id, action: 'message_sent', details: { conversation_id: conversationId } });
 
-    setMessages(prev => [...prev, { ...userMsg, role: 'user' as const }]);
-
-    // Increment user points
-    await supabase.rpc('increment_user_points', { p_user_id: user.id, p_points: 1 });
-
-    // Log activity - usar 'message_sent' para o contador funcionar
-    await supabase.from('activity_logs').insert({
-      user_id: user.id,
-      action: 'message_sent',
-      details: { conversation_id: conversationId }
-    });
-
-    // Call backend RAG — POST /api/chat (mesmo contrato da Edge Function)
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const apiUrl = import.meta.env.VITE_API_URL;
@@ -307,154 +165,76 @@ export default function Chat() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
         },
-        body: JSON.stringify({
-          message: content,
-          conversation_id: conversationId,
-        }),
+        body: JSON.stringify({ message: content, conversation_id: conversationId }),
       });
 
       let aiResponse = 'Desculpe, não consegui processar sua mensagem.';
-
       if (response.ok) {
         const data = await response.json();
         aiResponse = data.response || aiResponse;
       }
 
-      // Add AI message
-      const { data: aiMsg, error: aiMsgError } = await supabase
+      const { data: aiMsg } = await supabase
         .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          content: aiResponse,
-          role: 'assistant',
-        })
+        .insert({ conversation_id: conversationId, content: aiResponse, role: 'assistant' })
         .select()
         .single();
-
-      if (!aiMsgError) {
-        setMessages(prev => [...prev, { ...aiMsg, role: 'assistant' as const }]);
-      }
-    } catch (error) {
-      console.error('Error calling webhook:', error);
-      
-      // Add error message
-      const { data: errorMsg } = await supabase
+      if (aiMsg) setMessages(prev => [...prev, { ...aiMsg, role: 'assistant' as const }]);
+    } catch {
+      const { data: errMsg } = await supabase
         .from('messages')
-        .insert({
-          conversation_id: conversationId,
-          content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
-          role: 'assistant',
-        })
+        .insert({ conversation_id: conversationId, content: 'Erro ao processar sua mensagem. Tente novamente.', role: 'assistant' })
         .select()
         .single();
-
-      if (errorMsg) {
-        setMessages(prev => [...prev, { ...errorMsg, role: 'assistant' as const }]);
-      }
+      if (errMsg) setMessages(prev => [...prev, { ...errMsg, role: 'assistant' as const }]);
     }
 
-    // Update conversation timestamp
-    await supabase
-      .from('conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', conversationId);
-
+    await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
     setIsLoading(false);
   };
 
   const handleFeedback = async (messageId: string, feedback: 'like' | 'dislike') => {
-    // Find the AI message and the previous user message
-    const messageIndex = messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
-
-    const aiMessage = messages[messageIndex];
-    
-    // Find the previous user message
-    let userMessage = '';
-    for (let i = messageIndex - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        userMessage = messages[i].content;
-        break;
-      }
+    const msgIndex = messages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+    const aiMsg = messages[msgIndex];
+    let userMsg = '';
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { userMsg = messages[i].content; break; }
     }
-
-    // Set loading state
-    setMessages(prev => prev.map(m => 
-      m.id === messageId ? { ...m, feedbackLoading: true } : m
-    ));
-
-    const votosPositivos = feedback === 'like' ? 1 : 0;
-    const votosNegativos = feedback === 'dislike' ? 1 : 0;
 
     try {
-      // Check if feedback already exists for this pair
-      const { data: existingFeedback } = await supabase
+      const { data: existing } = await supabase
         .from('knowledge_feedback')
         .select('id')
-        .eq('pergunta_original', userMessage)
-        .eq('resposta_ia', aiMessage.content)
+        .eq('pergunta_original', userMsg)
+        .eq('resposta_ia', aiMsg.content)
         .maybeSingle();
 
-      if (existingFeedback) {
-        // Update existing record
-        const { error } = await supabase
-          .from('knowledge_feedback')
-          .update({
-            votos_positivos: votosPositivos,
-            votos_negativos: votosNegativos,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingFeedback.id);
+      const payload = {
+        votos_positivos: feedback === 'like' ? 1 : 0,
+        votos_negativos: feedback === 'dislike' ? 1 : 0,
+        updated_at: new Date().toISOString(),
+      };
 
-        if (error) throw error;
+      if (existing) {
+        await supabase.from('knowledge_feedback').update(payload).eq('id', existing.id);
       } else {
-        // Insert new record
-        const { error } = await supabase
-          .from('knowledge_feedback')
-          .insert({
-            pergunta_original: userMessage,
-            resposta_ia: aiMessage.content,
-            votos_positivos: votosPositivos,
-            votos_negativos: votosNegativos,
-          });
-
-        if (error) throw error;
+        await supabase.from('knowledge_feedback').insert({ pergunta_original: userMsg, resposta_ia: aiMsg.content, ...payload });
       }
 
-      // Update message state
-      setMessages(prev => prev.map(m => {
-        if (m.id === messageId) {
-          return { 
-            ...m, 
-            feedback,
-            feedbackLoading: false,
-            feedbackCounts: {
-              positive: votosPositivos,
-              negative: votosNegativos,
-            }
-          };
-        }
-        return m;
-      }));
-
-      toast({
-        title: 'Obrigado pelo feedback!',
-        duration: 2000,
-      });
-    } catch (error) {
-      console.error('Error saving feedback:', error);
-      
-      // Reset loading state
-      setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, feedbackLoading: false } : m
-      ));
-
-      toast({
-        variant: 'destructive',
-        title: 'Erro',
-        description: 'Não foi possível salvar o feedback.',
-      });
+      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, feedback } : m));
+      toast.success('Obrigado pelo feedback!');
+    } catch {
+      toast.error('Não foi possível salvar o feedback.');
     }
+  };
+
+  const pinnedConvs = conversations.filter(c => c.is_pinned);
+  const unpinnedConvs = conversations.filter(c => !c.is_pinned);
+
+  const getInitials = (name: string | null) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   if (loading) {
@@ -466,35 +246,85 @@ export default function Chat() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-background">
-      <div className="relative">
-        <ChatSidebar
-          conversations={conversations}
-          currentConversationId={currentConversationId || undefined}
-          onNewConversation={handleNewConversation}
-          onSelectConversation={handleSelectConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onRenameConversation={handleRenameConversation}
-          onPinConversation={handlePinConversation}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-        />
+    <div className="flex h-screen bg-background overflow-hidden">
+      <AppSidebar />
+
+      {/* Conversations panel */}
+      <div className="w-60 border-r bg-card flex flex-col shrink-0">
+        <div className="p-3 border-b">
+          <Button className="w-full gap-2" onClick={handleNewConversation}>
+            <Plus className="h-4 w-4" />
+            Nova Conversa
+          </Button>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {pinnedConvs.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Fixadas</p>
+                {pinnedConvs.map(conv => (
+                  <ConvItem
+                    key={conv.id}
+                    conv={conv}
+                    active={currentConversationId === conv.id}
+                    renamingId={renamingId}
+                    renameValue={renameValue}
+                    onSelect={() => setCurrentConversationId(conv.id)}
+                    onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
+                    onRenameChange={setRenameValue}
+                    onRenameSubmit={() => handleRenameSubmit(conv.id)}
+                    onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
+                    onDelete={() => handleDeleteConversation(conv.id)}
+                  />
+                ))}
+                <div className="border-t my-1" />
+              </>
+            )}
+            {unpinnedConvs.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Histórico</p>
+                {unpinnedConvs.map(conv => (
+                  <ConvItem
+                    key={conv.id}
+                    conv={conv}
+                    active={currentConversationId === conv.id}
+                    renamingId={renamingId}
+                    renameValue={renameValue}
+                    onSelect={() => setCurrentConversationId(conv.id)}
+                    onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
+                    onRenameChange={setRenameValue}
+                    onRenameSubmit={() => handleRenameSubmit(conv.id)}
+                    onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
+                    onDelete={() => handleDeleteConversation(conv.id)}
+                  />
+                ))}
+              </>
+            )}
+            {conversations.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-8 px-4">
+                Nenhuma conversa ainda. Comece digitando uma mensagem!
+              </p>
+            )}
+          </div>
+        </ScrollArea>
       </div>
 
+      {/* Chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b flex items-center justify-end px-4">
+        <header className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
+          <div>
+            <h1 className="text-lg font-semibold">Assistente IA</h1>
+            <p className="text-xs text-muted-foreground">Tkzinho — powered by IA</p>
+          </div>
           <ThemeToggle />
         </header>
 
-        <ScrollArea className="flex-1 p-4">
-          <div className="max-w-3xl mx-auto space-y-4">
+        <ScrollArea className="flex-1">
+          <div className="max-w-3xl mx-auto p-6 space-y-6">
             {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                <img 
-                  src={tkzinhoAvatar} 
-                  alt="Tkzinho" 
-                  className="h-16 w-16 rounded-full object-cover mb-4"
-                />
+              <div className="flex flex-col items-center justify-center text-center py-24">
+                <img src={tkzinhoAvatar} alt="Tkzinho" className="h-20 w-20 rounded-full object-cover mb-4 shadow-md" />
                 <h2 className="text-2xl font-semibold mb-2">Olá! Eu sou o Tkzinho</h2>
                 <p className="text-muted-foreground max-w-md">
                   Estou aqui para ajudar você. Digite sua mensagem abaixo para começar uma conversa.
@@ -502,42 +332,60 @@ export default function Chat() {
               </div>
             ) : (
               messages.map((message, index) => {
-                // Find previous user message for AI messages
-                let previousUserMessage = '';
-                if (message.role === 'assistant') {
-                  for (let i = index - 1; i >= 0; i--) {
-                    if (messages[i].role === 'user') {
-                      previousUserMessage = messages[i].content;
-                      break;
-                    }
-                  }
-                }
-                
+                const isUser = message.role === 'user';
                 return (
-                  <ChatMessage
-                    key={message.id}
-                    id={message.id}
-                    content={message.content}
-                    role={message.role}
-                    userAvatar={profile?.avatar_url}
-                    userName={profile?.full_name || profile?.email || 'Você'}
-                    onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
-                    currentFeedback={message.feedback}
-                    feedbackCounts={message.feedbackCounts}
-                    feedbackLoading={message.feedbackLoading}
-                    previousUserMessage={previousUserMessage}
-                  />
+                  <div key={message.id} className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
+                    {isUser ? (
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage src={profile?.avatar_url || undefined} />
+                        <AvatarFallback className="text-xs">{getInitials(profile?.full_name || null)}</AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <img src={tkzinhoAvatar} alt="Tkzinho" className="h-8 w-8 rounded-full object-cover shrink-0" />
+                    )}
+                    <div className={cn('flex flex-col gap-1 max-w-[75%]', isUser ? 'items-end' : 'items-start')}>
+                      <div
+                        className={cn(
+                          'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                          isUser
+                            ? 'bg-[#004C97] text-white rounded-tr-sm'
+                            : 'bg-muted rounded-tl-sm'
+                        )}
+                      >
+                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                      </div>
+                      {!isUser && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <button
+                            onClick={() => handleFeedback(message.id, 'like')}
+                            className={cn('p-1 rounded hover:bg-muted transition-colors', message.feedback === 'like' && 'text-green-500')}
+                          >
+                            <ThumbsUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(message.id, 'dislike')}
+                            className={cn('p-1 rounded hover:bg-muted transition-colors', message.feedback === 'dislike' && 'text-red-500')}
+                          >
+                            <ThumbsDown className="h-3 w-3" />
+                          </button>
+                          {message.created_at && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              {formatDistanceToNow(new Date(message.created_at), { addSuffix: true, locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 );
               })
             )}
-            
+
             {isLoading && (
               <div className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold shrink-0">
-                  TK
-                </div>
-                <div className="bg-chat-ai rounded-2xl rounded-tl-sm px-4 py-3">
-                  <div className="flex gap-1">
+                <img src={tkzinhoAvatar} alt="Tkzinho" className="h-8 w-8 rounded-full object-cover shrink-0" />
+                <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3">
+                  <div className="flex gap-1 items-center h-5">
                     <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -545,17 +393,123 @@ export default function Chat() {
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t">
+        {/* Input */}
+        <div className="p-4 border-t bg-card shrink-0">
           <div className="max-w-3xl mx-auto">
-            <ChatInput onSend={handleSendMessage} disabled={isLoading} />
+            <div className="flex gap-2 items-end">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                rows={1}
+                disabled={isLoading}
+                className="flex-1 resize-none rounded-xl border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004C97]/50 disabled:opacity-50 min-h-[48px] max-h-[200px]"
+                style={{ height: 'auto' }}
+                onInput={e => {
+                  const el = e.currentTarget;
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+                }}
+              />
+              <Button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="h-12 w-12 rounded-xl bg-[#004C97] hover:bg-[#003a75] shrink-0"
+                size="icon"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ConvItem({
+  conv,
+  active,
+  renamingId,
+  renameValue,
+  onSelect,
+  onRenameStart,
+  onRenameChange,
+  onRenameSubmit,
+  onPin,
+  onDelete,
+}: {
+  conv: Conversation;
+  active: boolean;
+  renamingId: string | null;
+  renameValue: string;
+  onSelect: () => void;
+  onRenameStart: () => void;
+  onRenameChange: (v: string) => void;
+  onRenameSubmit: () => void;
+  onPin: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        'group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm transition-colors',
+        active ? 'bg-[#004C97]/10 text-[#004C97] dark:text-blue-400' : 'hover:bg-muted'
+      )}
+      onClick={onSelect}
+    >
+      <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-60" />
+      {renamingId === conv.id ? (
+        <Input
+          autoFocus
+          value={renameValue}
+          onChange={e => onRenameChange(e.target.value)}
+          onBlur={onRenameSubmit}
+          onKeyDown={e => { if (e.key === 'Enter') onRenameSubmit(); if (e.key === 'Escape') onRenameChange(''); }}
+          className="h-6 text-xs px-1 py-0"
+          onClick={e => e.stopPropagation()}
+        />
+      ) : (
+        <span className="flex-1 truncate text-xs">{conv.title}</span>
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+          <button className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 transition-opacity">
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onClick={e => { e.stopPropagation(); onRenameStart(); }}>
+            Renomear
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={e => { e.stopPropagation(); onPin(); }}>
+            {conv.is_pinned ? (
+              <><PinOff className="h-3.5 w-3.5 mr-2" />Desafixar</>
+            ) : (
+              <><Pin className="h-3.5 w-3.5 mr-2" />Fixar</>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+            className="text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-2" />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
