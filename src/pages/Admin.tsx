@@ -224,22 +224,25 @@ export default function Admin() {
   };
 
   const fetchUsers = async () => {
-    // Fetch profiles - only users with full_name (completed registration)
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('*')
-      .not('full_name', 'is', null)
-      .order('full_name');
-    
-    if (profilesError) {
+    // Fetch profiles and roles in parallel
+    const [profilesRes, rolesRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, email, full_name, account_status, last_sign_in_at')
+        .not('full_name', 'is', null)
+        .order('full_name'),
+      supabase
+        .from('user_roles')
+        .select('user_id, role'),
+    ]);
+
+    if (profilesRes.error) {
       toast.error('Erro ao carregar usuários');
       return;
     }
 
-    // Fetch user_roles to get actual app roles
-    const { data: rolesData } = await supabase
-      .from('user_roles')
-      .select('user_id, role');
+    const profilesData = profilesRes.data;
+    const rolesData = rolesRes.data;
 
     const rolesMap = new Map<string, AppRole>();
     rolesData?.forEach(r => rolesMap.set(r.user_id, r.role as AppRole));
@@ -274,8 +277,10 @@ export default function Admin() {
   const fetchDocuments = async () => {
     const { data, error } = await supabase
       .from('documents')
-      .select('*')
-      .order('id', { ascending: false });
+      // exclude embedding column — it's a large vector not needed in the UI
+      .select('id, content, metadata, file_name, file_path, status, created_at, uploaded_by')
+      .order('id', { ascending: false })
+      .limit(200);
     
     if (error) {
       toast.error('Erro ao carregar documentos');
