@@ -35,6 +35,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -57,6 +66,7 @@ import {
   Trash2,
   RefreshCw,
   Sparkles,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -167,7 +177,20 @@ function CertificatesTab() {
   const [expiredDialogCert, setExpiredDialogCert] = useState<Certificate | null>(null);
   // Set of cert IDs currently being watched (shows "Extraindo..." in UI)
   const [watchingIds, setWatchingIds] = useState<Set<string>>(new Set());
+  // Manual-entry dialog state
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualForm, setManualForm] = useState({
+    employee_name: '',
+    course_name: '',
+    completion_date: '',
+    expiry_date: '',
+    hours: '',
+    file_name: '',
+    file_url: '',
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const manualFileInputRef = useRef<HTMLInputElement>(null);
   // Map of certId → timeout handle for active watchers
   const watchersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -384,6 +407,89 @@ function CertificatesTab() {
     }
   };
 
+  const resetManualForm = () => {
+    setManualForm({
+      employee_name: '',
+      course_name: '',
+      completion_date: '',
+      expiry_date: '',
+      hours: '',
+      file_name: '',
+      file_url: '',
+    });
+  };
+
+  const handleManualFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Formato inválido. Use PDF, JPEG ou PNG.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo 10MB.');
+      return;
+    }
+
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('certificates').upload(path, file);
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('certificates').getPublicUrl(path);
+      setManualForm(prev => ({ ...prev, file_name: file.name, file_url: publicUrl }));
+      toast.success('Arquivo anexado.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao anexar arquivo.');
+    } finally {
+      if (manualFileInputRef.current) manualFileInputRef.current.value = '';
+    }
+  };
+
+  const handleManualSave = async () => {
+    if (!user) return;
+    if (
+      !manualForm.employee_name.trim() ||
+      !manualForm.course_name.trim() ||
+      !manualForm.completion_date ||
+      !manualForm.expiry_date ||
+      !manualForm.hours
+    ) {
+      toast.error('Todos os campos são obrigatórios.');
+      return;
+    }
+
+    setManualSaving(true);
+    try {
+      const { error } = await supabase.from('processed_certificates').insert({
+        employee_name: manualForm.employee_name.trim(),
+        course_name: manualForm.course_name.trim(),
+        completion_date: manualForm.completion_date || null,
+        expiry_date: manualForm.expiry_date || null,
+        hours: manualForm.hours ? Number(manualForm.hours) : null,
+        file_name: manualForm.file_name || null,
+        file_url: manualForm.file_url || null,
+        status: 'approved', // manually entered by admin — trigger will convert to 'expired' if past date
+        org_id: null,
+      });
+      if (error) throw error;
+      toast.success('Certificado adicionado manualmente.');
+      await logActivity(user.id, 'certificate_uploaded', { file_name: manualForm.file_name || manualForm.course_name });
+      setManualOpen(false);
+      resetManualForm();
+      await fetchCerts();
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Erro ao salvar: ${msg}`);
+    } finally {
+      setManualSaving(false);
+    }
+  };
+
   const handleDeleteCert = async (cert: Certificate, e?: React.MouseEvent, skipConfirm = false) => {
     e?.stopPropagation(); // prevent opening the detail sheet
     if (!skipConfirm && !confirm(`Excluir o certificado "${cert.file_name ?? cert.course_name}"? Esta ação não pode ser desfeita.`)) return;
@@ -453,6 +559,14 @@ function CertificatesTab() {
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {uploading ? 'Enviando...' : 'Enviar Certificado'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setManualOpen(true)}
+              className="gap-2 shrink-0"
+            >
+              <Plus className="h-4 w-4" />
+              Adicionar manualmente
             </Button>
             <input
               ref={fileInputRef}
@@ -618,6 +732,128 @@ function CertificatesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Manual entry dialog */}
+      <Dialog
+        open={manualOpen}
+        onOpenChange={(open) => {
+          setManualOpen(open);
+          if (!open) resetManualForm();
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar certificado manualmente</DialogTitle>
+            <DialogDescription>
+              Todos os campos são obrigatórios. Anexar o arquivo é opcional.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="manual-employee">Colaborador</Label>
+              <Input
+                id="manual-employee"
+                value={manualForm.employee_name}
+                onChange={(e) => setManualForm(prev => ({ ...prev, employee_name: e.target.value }))}
+                placeholder="Nome completo"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-course">Curso / Treinamento</Label>
+              <Input
+                id="manual-course"
+                value={manualForm.course_name}
+                onChange={(e) => setManualForm(prev => ({ ...prev, course_name: e.target.value }))}
+                placeholder="Ex: NR-10 - Segurança em eletricidade"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="manual-completion">Data de conclusão</Label>
+                <Input
+                  id="manual-completion"
+                  type="date"
+                  value={manualForm.completion_date}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, completion_date: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="manual-expiry">Data de vencimento</Label>
+                <Input
+                  id="manual-expiry"
+                  type="date"
+                  value={manualForm.expiry_date}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, expiry_date: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-hours">Carga horária (horas)</Label>
+              <Input
+                id="manual-hours"
+                type="number"
+                min="1"
+                value={manualForm.hours}
+                onChange={(e) => setManualForm(prev => ({ ...prev, hours: e.target.value }))}
+                placeholder="40"
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Arquivo (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => manualFileInputRef.current?.click()}
+                  className="gap-2"
+                >
+                  <Upload className="h-3 w-3" />
+                  {manualForm.file_name ? 'Trocar arquivo' : 'Anexar arquivo'}
+                </Button>
+                {manualForm.file_name && (
+                  <span className="text-xs text-muted-foreground truncate">
+                    {manualForm.file_name}
+                  </span>
+                )}
+              </div>
+              <input
+                ref={manualFileInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                className="hidden"
+                onChange={handleManualFileSelect}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setManualOpen(false);
+                resetManualForm();
+              }}
+              disabled={manualSaving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleManualSave} disabled={manualSaving}>
+              {manualSaving ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Salvando...</>
+              ) : (
+                'Salvar'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail sheet */}
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
