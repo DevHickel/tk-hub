@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -115,6 +115,8 @@ const PAGE_SIZE = 20;
 export default function Documents() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialExpiryFilter = searchParams.get('expiry') ?? 'all';
 
   useEffect(() => {
     if (authLoading) return;
@@ -147,7 +149,7 @@ export default function Documents() {
             </TabsList>
 
             <TabsContent value="certificados">
-              <CertificatesTab />
+              <CertificatesTab initialExpiryFilter={initialExpiryFilter} />
             </TabsContent>
 
             <TabsContent value="rag">
@@ -162,7 +164,7 @@ export default function Documents() {
 
 // ─── Certificates Tab ────────────────────────────────────────────────────────
 
-function CertificatesTab() {
+function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?: string }) {
   const { user } = useAuth();
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [total, setTotal] = useState(0);
@@ -172,7 +174,7 @@ function CertificatesTab() {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [expiryFilter, setExpiryFilter] = useState('all');
+  const [expiryFilter, setExpiryFilter] = useState(initialExpiryFilter);
   const [selected, setSelected] = useState<Certificate | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [extractingId, setExtractingId] = useState<string | null>(null);

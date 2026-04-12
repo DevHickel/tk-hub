@@ -79,7 +79,8 @@ export default function Dashboard() {
         activityRes,
         expiredRes,
       ] = await Promise.all([
-        supabase.rpc('count_rag_documents'),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.rpc as any)('count_rag_documents'),
         supabase.from('processed_certificates').select('status, employee_name'),
         supabase
           .from('activity_logs')
@@ -228,7 +229,7 @@ export default function Dashboard() {
                   Certificados vencidos
                 </CardTitle>
                 <Button variant="ghost" size="sm" asChild>
-                  <Link to="/documents" className="text-xs flex items-center gap-1">
+                  <Link to="/documents?expiry=expired" className="text-xs flex items-center gap-1">
                     Ver todos <ArrowRight className="h-3 w-3" />
                   </Link>
                 </Button>
