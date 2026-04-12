@@ -36,6 +36,8 @@ import {
   Clock,
   Search,
   Mail,
+  BarChart3,
+  FileText,
 } from 'lucide-react'
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
