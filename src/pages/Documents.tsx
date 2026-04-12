@@ -169,6 +169,7 @@ function CertificatesTab() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expiryFilter, setExpiryFilter] = useState('all');
@@ -310,72 +311,87 @@ function CertificatesTab() {
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) return;
 
     const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      toast.error('Formato inválido. Use PDF, JPEG ou PNG.');
-      return;
+    const validFiles: File[] = [];
+    for (const file of Array.from(files)) {
+      if (!validTypes.includes(file.type)) {
+        toast.error(`Formato inválido: ${file.name}. Use PDF, JPEG ou PNG.`);
+        continue;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`Arquivo muito grande: ${file.name}. Máximo 10MB.`);
+        continue;
+      }
+      validFiles.push(file);
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 10MB.');
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setUploading(true);
-    try {
-      const ext = file.name.split('.').pop();
-      // path: userId/timestamp.ext — first folder = userId for delete policy
-      const path = `${user.id}/${Date.now()}.${ext}`;
+    setUploadProgress({ current: 0, total: validFiles.length });
 
-      const { error: uploadError } = await supabase.storage.from('certificates').upload(path, file);
-      if (uploadError) throw uploadError;
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiUrl = import.meta.env.VITE_API_URL;
+    let successCount = 0;
 
-      const { data: { publicUrl } } = supabase.storage.from('certificates').getPublicUrl(path);
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      setUploadProgress({ current: i + 1, total: validFiles.length });
+      try {
+        const ext = file.name.split('.').pop();
+        const path = `${user.id}/${Date.now()}_${i}.${ext}`;
 
-      const { data: certRow, error: dbError } = await supabase
-        .from('processed_certificates')
-        .insert({ file_name: file.name, file_url: publicUrl, status: 'pending', org_id: null })
-        .select('id')
-        .single();
-      if (dbError) throw dbError;
+        const { error: uploadError } = await supabase.storage.from('certificates').upload(path, file);
+        if (uploadError) throw uploadError;
 
-      // Trigger background AI extraction
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = import.meta.env.VITE_API_URL;
-      const res = await fetch(`${apiUrl}/api/certificates/${certRow.id}/extract`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ file_url: publicUrl, file_name: file.name }),
-      });
+        const { data: { publicUrl } } = supabase.storage.from('certificates').getPublicUrl(path);
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        console.error('Extract endpoint failed', { status: res.status, body: errText });
-        toast.error(`Falha ao iniciar extração (HTTP ${res.status}). Verifique se o backend está rodando.`);
+        const { data: certRow, error: dbError } = await supabase
+          .from('processed_certificates')
+          .insert({ file_name: file.name, file_url: publicUrl, status: 'pending', org_id: null })
+          .select('id')
+          .single();
+        if (dbError) throw dbError;
+
+        const res = await fetch(`${apiUrl}/api/certificates/${certRow.id}/extract`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ file_url: publicUrl, file_name: file.name }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.error('Extract endpoint failed', { status: res.status, body: errText });
+          toast.error(`Falha na extração de ${file.name} (HTTP ${res.status})`);
+        } else {
+          startWatching(certRow.id);
+          successCount++;
+        }
+
         await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
-        await fetchCerts();
-        return;
+      } catch (err: unknown) {
+        console.error(err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`Erro ao enviar ${file.name}: ${msg}`);
       }
-
-      // Start watching this cert for terminal status (expired/rejected triggers popup)
-      startWatching(certRow.id);
-
-      toast.success('Certificado enviado! Extraindo dados automaticamente...');
-      await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
-      await fetchCerts();
-    } catch (err: unknown) {
-      console.error(err);
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Erro ao enviar certificado: ${msg}`);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+
+    if (successCount > 0) {
+      toast.success(
+        validFiles.length === 1
+          ? 'Certificado enviado! Extraindo dados automaticamente...'
+          : `${successCount} certificado${successCount > 1 ? 's' : ''} enviado${successCount > 1 ? 's' : ''}! Extraindo dados...`
+      );
+    }
+    await fetchCerts();
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleExtract = async (cert: Certificate, e: React.MouseEvent) => {
@@ -563,7 +579,9 @@ function CertificatesTab() {
             </Select>
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? 'Enviando...' : 'Enviar Certificado'}
+              {uploading
+                ? (uploadProgress.total > 1 ? `Enviando ${uploadProgress.current}/${uploadProgress.total}...` : 'Enviando...')
+                : 'Enviar Certificados'}
             </Button>
             <Button
               variant="outline"
@@ -577,6 +595,7 @@ function CertificatesTab() {
               ref={fileInputRef}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp"
+              multiple
               className="hidden"
               onChange={handleUpload}
             />
