@@ -545,7 +545,10 @@ function CertificatesTab() {
                 <SelectItem value="all">Todos os status</SelectItem>
                 <SelectItem value="approved">Aprovado</SelectItem>
                 <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="processing">Processando</SelectItem>
+                <SelectItem value="expired">Vencido</SelectItem>
                 <SelectItem value="rejected">Rejeitado</SelectItem>
+                <SelectItem value="error">Erro</SelectItem>
               </SelectContent>
             </Select>
             <Select value={expiryFilter} onValueChange={setExpiryFilter}>
