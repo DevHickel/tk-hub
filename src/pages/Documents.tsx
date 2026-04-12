@@ -86,6 +86,7 @@ interface Certificate {
   file_url: string | null;
   status: string | null;
   rejection_reason: string | null;
+  source?: string | null;
   created_at: string | null;
 }
 
@@ -473,6 +474,7 @@ function CertificatesTab() {
         file_name: manualForm.file_name || null,
         file_url: manualForm.file_url || null,
         status: 'approved', // manually entered by admin — trigger will convert to 'expired' if past date
+        source: 'manual',
         org_id: null,
       });
       if (error) throw error;
@@ -630,9 +632,16 @@ function CertificatesTab() {
                       <TableCell>{expiryBadge(cert.expiry_date)}</TableCell>
                       <TableCell>{cert.hours ?? '—'}</TableCell>
                       <TableCell>
-                        <Badge variant={cfg.variant} className="flex items-center gap-1 w-fit">
-                          {cfg.icon}{cfg.label}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant={cfg.variant} className="flex items-center gap-1 w-fit">
+                            {cfg.icon}{cfg.label}
+                          </Badge>
+                          {cert.source === 'manual' && (
+                            <Badge variant="outline" className="text-xs w-fit text-blue-500 border-blue-500/50">
+                              Manual
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
@@ -873,9 +882,16 @@ function CertificatesTab() {
                 <DetailRow label="Carga horária" value={selected.hours ? `${selected.hours}h` : null} />
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="text-sm text-muted-foreground">Status</span>
-                  <Badge variant={CERT_STATUS[selected.status ?? '']?.variant ?? 'outline'}>
-                    {CERT_STATUS[selected.status ?? '']?.label ?? selected.status ?? '—'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={CERT_STATUS[selected.status ?? '']?.variant ?? 'outline'}>
+                      {CERT_STATUS[selected.status ?? '']?.label ?? selected.status ?? '—'}
+                    </Badge>
+                    {selected.source === 'manual' && (
+                      <Badge variant="outline" className="text-blue-500 border-blue-500/50">
+                        Manual
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 {selected.rejection_reason && (
                   <div className="p-3 rounded-md bg-destructive/10 text-sm text-destructive">
