@@ -161,7 +161,65 @@ export function setupCertificateWorker() {
           return
         }
 
-        // Update record with extracted data
+        // --- DEDUPLICATION / RENEWAL LOGIC ---
+        // If both key fields were extracted, check for existing cert with same employee+course.
+        // If found, update the existing record and delete the temporary one.
+        if (extracted.employee_name && extracted.course_name) {
+          const { data: existingCerts } = await supabase
+            .from('processed_certificates')
+            .select('id, file_url')
+            .neq('id', certificateId)
+            .ilike('employee_name', extracted.employee_name.trim())
+            .ilike('course_name', extracted.course_name.trim())
+            .order('created_at', { ascending: false })
+            .limit(1)
+
+          if (existingCerts && existingCerts.length > 0) {
+            const existingId = existingCerts[0].id
+            const oldFileUrl = existingCerts[0].file_url
+
+            // Update the EXISTING record with new data
+            await supabase
+              .from('processed_certificates')
+              .update({
+                employee_name: extracted.employee_name,
+                course_name: extracted.course_name,
+                completion_date: extracted.completion_date,
+                expiry_date: extracted.expiry_date,
+                hours: extracted.hours,
+                file_name: fileName,
+                file_url: fileUrl,
+                status: 'pending',
+                renewed_from: certificateId,
+                renewed_at: new Date().toISOString(),
+              })
+              .eq('id', existingId)
+
+            // Delete the temporary row created during upload
+            await supabase
+              .from('processed_certificates')
+              .delete()
+              .eq('id', certificateId)
+
+            // Clean up old file from storage
+            if (oldFileUrl) {
+              try {
+                const match = oldFileUrl.match(/\/certificates\/(.+)$/)
+                if (match) {
+                  await supabase.storage.from('certificates').remove([match[1]])
+                }
+              } catch (err) {
+                safeLog('warn', 'Failed to delete old certificate file', { oldFileUrl, error: (err as Error).message })
+              }
+            }
+
+            safeLog('info', 'Certificate renewed (merged into existing)', { certificateId, existingId })
+            await job.updateProgress(100)
+            return
+          }
+        }
+
+        // --- NORMAL PATH (no match found) ---
         await supabase
           .from('processed_certificates')
           .update({

@@ -87,6 +87,7 @@ interface Certificate {
   status: string | null;
   rejection_reason: string | null;
   source?: string | null;
+  renewed_at?: string | null;
   created_at: string | null;
 }
 
@@ -265,8 +266,22 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
         .maybeSingle();
 
       if (!data) {
-        // Cert was deleted by old trigger — show popup
+        // Check if this cert was merged into an existing one (renewal)
+        const { data: renewedCert } = await supabase
+          .from('processed_certificates')
+          .select('id, employee_name, course_name, status')
+          .eq('renewed_from' as string, certId)
+          .maybeSingle();
+
         setWatchingIds(prev => { const s = new Set(prev); s.delete(certId); return s; });
+
+        if (renewedCert) {
+          toast.success(`Certificado atualizado: ${renewedCert.employee_name ?? '—'} — ${renewedCert.course_name ?? '—'}`);
+          fetchCerts();
+          return;
+        }
+
+        // Cert was truly deleted — show popup
         setExpiredDialogCert({
           id: certId, status: 'expired', expiry_date: null,
           employee_name: null, course_name: null, completion_date: null,
@@ -665,6 +680,11 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                               Manual
                             </Badge>
                           )}
+                          {cert.renewed_at && (
+                            <span className="text-xs text-muted-foreground">
+                              Atualizado em {format(new Date(cert.renewed_at), 'dd/MM/yyyy')}
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -914,6 +934,11 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                       <Badge variant="outline" className="text-blue-500 border-blue-500/50">
                         Manual
                       </Badge>
+                    )}
+                    {selected.renewed_at && (
+                      <span className="text-xs text-muted-foreground">
+                        Atualizado em {format(new Date(selected.renewed_at), 'dd/MM/yyyy')}
+                      </span>
                     )}
                   </div>
                 </div>
