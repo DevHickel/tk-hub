@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
-import { Users, FileText, Activity, Search, Trash2, Upload, MessageSquare, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
+import { Users, Activity, Search, Trash2, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -45,18 +45,6 @@ interface ActivityLog {
   profiles?: { full_name: string | null; email: string | null };
 }
 
-interface Document {
-  id: number;
-  content: string | null;
-  metadata: unknown;
-}
-
-interface GroupedDocument {
-  name: string;
-  totalPages: number;
-  ids: number[];
-}
-
 interface Invite {
   id: string;
   email: string;
@@ -69,14 +57,20 @@ interface Invite {
 
 // Mapa de ações para nomes amigáveis
 const actionLabels: Record<string, string> = {
-  'message_sent': 'Mensagem',
-  'document_uploaded': 'Upload de Documento',
-  'document_deleted': 'Documento Excluído',
-  'permission_changed': 'Permissão Alterada',
-  'user_login': 'Login',
-  'user_logout': 'Logout',
-  'invite_sent': 'Convite Enviado',
-  'profile_updated': 'Perfil Atualizado',
+  'message_sent': 'Enviou mensagem',
+  'certificate_uploaded': 'Enviou certificado',
+  'certificate_deleted': 'Excluiu certificado',
+  'rag_document_uploaded': 'Enviou documento para IA',
+  'rag_document_deleted': 'Excluiu documento da IA',
+  'document_uploaded': 'Enviou documento',
+  'document_deleted': 'Excluiu documento',
+  'permission_changed': 'Alterou permissão',
+  'user_login': 'Entrou no sistema',
+  'user_logout': 'Saiu do sistema',
+  'invite_sent': 'Enviou convite',
+  'profile_updated': 'Atualizou perfil',
+  'upload': 'Enviou documento',
+  'delete_document': 'Excluiu documento',
 };
 
 const getActionLabel = (action: string): string => {
@@ -88,16 +82,11 @@ export default function Admin() {
   const { profile, user, appRoles } = useAuth();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [documents, setDocuments] = useState<Document[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [docSearchTerm, setDocSearchTerm] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { isAdmin, loading: authLoading } = useAuth();
   const isTkMaster = appRoles.includes('tk_master');
@@ -189,23 +178,6 @@ export default function Admin() {
     errorMessage: 'Erro ao excluir convite',
   });
 
-  // Hook para exclusão de documento
-  const docDelete = useDeleteWithConfirmation<number[]>({
-    onDelete: async (docIds) => {
-      const { error } = await supabase
-        .from('documents')
-        .delete()
-        .in('id', docIds);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      const deletedIds = new Set(docDelete.itemToDelete || []);
-      setDocuments(prev => prev.filter(d => !deletedIds.has(d.id)));
-    },
-    successMessage: 'Documento excluído',
-    errorMessage: 'Erro ao excluir documento',
-  });
 
   useEffect(() => {
     if (authLoading) return; // wait for auth to resolve
@@ -219,7 +191,7 @@ export default function Admin() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    await Promise.all([fetchUsers(), fetchActivityLogs(), fetchDocuments(), fetchInvites()]);
+    await Promise.all([fetchUsers(), fetchActivityLogs(), fetchInvites()]);
     setIsLoading(false);
   };
 
@@ -274,20 +246,6 @@ export default function Admin() {
     setActivityLogs(data || []);
   };
 
-  const fetchDocuments = async () => {
-    const { data, error } = await supabase
-      .from('documents')
-      // exclude embedding column — it's a large vector not needed in the UI
-      .select('id, content, metadata, file_name, file_path, status, created_at, uploaded_by')
-      .order('id', { ascending: false })
-      .limit(200);
-    
-    if (error) {
-      toast.error('Erro ao carregar documentos');
-      return;
-    }
-    setDocuments(data || []);
-  };
 
   const fetchInvites = async () => {
     // Fetch only pending invites
@@ -411,78 +369,6 @@ export default function Admin() {
     fetchUsers();
   };
 
-  const handleFileUpload = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    setIsUploading(true);
-
-    try {
-      const formData = new FormData();
-      for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
-      }
-
-      const response = await fetch('https://n8n.vetorix.com.br/form/7fe68a76-3359-4fb9-8e63-4909d487f04e', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        toast.success('Documento enviado para processamento!');
-        setTimeout(() => fetchDocuments(), 3000); // Refresh após 3s
-      } else {
-        toast.error('Erro ao enviar documento');
-      }
-    } catch (err) {
-      console.error('Upload error:', err);
-      toast.error('Erro ao enviar documento');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    handleFileUpload(e.dataTransfer.files);
-  };
-
-  // Agrupar documentos por nome de arquivo
-  const groupedDocuments: GroupedDocument[] = documents.reduce((acc, doc) => {
-    const metadata = doc.metadata as Record<string, unknown> | null;
-    const source = (metadata?.source as string) || `Documento ${doc.id}`;
-    const existing = acc.find(d => d.name === source);
-    
-    if (existing) {
-      existing.totalPages++;
-      existing.ids.push(doc.id);
-    } else {
-      acc.push({
-        name: source,
-        totalPages: 1,
-        ids: [doc.id],
-      });
-    }
-    
-    return acc;
-  }, [] as GroupedDocument[]);
-
-  const filteredDocuments = groupedDocuments.filter(doc =>
-    doc.name.toLowerCase().includes(docSearchTerm.toLowerCase())
-  );
 
   // Contar mensagens por usuário (usando user_id)
   const messageCountByUserId = activityLogs.reduce((acc, log) => {
@@ -492,14 +378,21 @@ export default function Admin() {
     return acc;
   }, {} as Record<string, number>);
 
-  // Contar mensagens por nome para exibição nos logs
-  const messageCountByUser = activityLogs.reduce((acc, log) => {
-    if (log.action === 'message_sent') {
-      const userName = log.profiles?.full_name || log.profiles?.email || log.user_id;
-      acc[userName] = (acc[userName] || 0) + 1;
+  // Pontuação cumulativa por usuário: percorre os logs do mais antigo ao mais recente
+  // e atribui 1, 2, 3... para cada mensagem do mesmo usuário
+  const cumulativeScoreByLogId = (() => {
+    const counters: Record<string, number> = {};
+    const result: Record<number, number> = {};
+    // activityLogs is newest-first, so reverse to count chronologically
+    const chronological = [...activityLogs].reverse();
+    for (const log of chronological) {
+      if (log.action === 'message_sent') {
+        counters[log.user_id] = (counters[log.user_id] || 0) + 1;
+        result[log.id] = counters[log.user_id];
+      }
     }
-    return acc;
-  }, {} as Record<string, number>);
+    return result;
+  })();
 
   const filteredUsers = users.filter(user =>
     user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -529,7 +422,7 @@ export default function Admin() {
 
         <main className="flex-1 overflow-y-auto p-6">
         <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full max-w-lg grid-cols-4">
+          <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Usuários
@@ -541,10 +434,6 @@ export default function Admin() {
             <TabsTrigger value="logs" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Logs
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Documentos
             </TabsTrigger>
           </TabsList>
 
@@ -758,12 +647,12 @@ export default function Admin() {
                   <TableBody>
                     {activityLogs.map((log) => {
                       const userName = log.profiles?.full_name || log.profiles?.email || '-';
-                      const messageCount = log.action === 'message_sent' ? messageCountByUser[userName] || 0 : null;
-                      
+                      const score = cumulativeScoreByLogId[log.id];
+
                       return (
                         <TableRow key={log.id}>
                           <TableCell>
-                            {log.timestamp 
+                            {log.timestamp
                               ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
                               : '-'}
                           </TableCell>
@@ -772,8 +661,8 @@ export default function Admin() {
                             <Badge variant="outline">{getActionLabel(log.action)}</Badge>
                           </TableCell>
                           <TableCell>
-                            {messageCount !== null ? (
-                              <Badge variant="secondary">{messageCount}</Badge>
+                            {score != null ? (
+                              <Badge variant="secondary">{score}</Badge>
                             ) : (
                               '-'
                             )}
@@ -787,118 +676,8 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="documents">
-            <div className="space-y-6">
-              {/* Upload Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upload de Documento</CardTitle>
-                  <CardDescription>Envie arquivos PDF para processamento e indexação</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={`
-                      relative border-2 border-dashed rounded-lg p-8 text-center 
-                      transition-all duration-300 ease-in-out cursor-pointer
-                      ${isDragOver 
-                        ? 'border-primary bg-primary/10 scale-[1.02]' 
-                        : 'border-border hover:border-primary/50 hover:bg-muted/50'
-                      }
-                      ${isUploading ? 'opacity-50 pointer-events-none' : ''}
-                    `}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleFileUpload(e.target.files)}
-                    />
-                    <div className={`flex flex-col items-center gap-3 transition-transform duration-300 ${isDragOver ? 'scale-110' : ''}`}>
-                      <Upload className={`h-10 w-10 transition-colors duration-300 ${isDragOver ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <div>
-                        <p className="font-medium">
-                          {isUploading ? 'Enviando...' : 'Arraste arquivos aqui ou clique para selecionar'}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Suporta arquivos PDF
-                        </p>
-                      </div>
-                    </div>
-                    {isUploading && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-lg">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* Documents List */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Documentos Processados</CardTitle>
-                  <CardDescription>Gerencie e exclua documentos indexados no sistema</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por nome do arquivo..."
-                      value={docSearchTerm}
-                      onChange={(e) => setDocSearchTerm(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nome do Arquivo</TableHead>
-                        <TableHead className="text-right">Total de Páginas/Chunks</TableHead>
-                        <TableHead className="w-20 text-center">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredDocuments.map((doc) => (
-                        <TableRow key={doc.name}>
-                          <TableCell className="font-medium">{doc.name}</TableCell>
-                          <TableCell className="text-right">{doc.totalPages}</TableCell>
-                          <TableCell className="text-center">
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => docDelete.requestDelete(doc.ids)}
-                              disabled={docDelete.isDeleting}
-                              title="Excluir documento"
-                            >
-                              {docDelete.isDeleting && JSON.stringify(docDelete.itemToDelete) === JSON.stringify(doc.ids) ? (
-                                <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                              ) : (
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              )}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredDocuments.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                            Nenhum documento encontrado
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
+
         </Tabs>
         </main>
       </div>
@@ -919,14 +698,6 @@ export default function Admin() {
         isDeleting={inviteDelete.isDeleting}
         title="Excluir convite?"
         description="Esta ação não pode ser desfeita. O convite será permanentemente removido."
-      />
-      <DeleteConfirmDialog
-        open={docDelete.isDialogOpen}
-        onOpenChange={(open) => !open && docDelete.cancelDelete()}
-        onConfirm={docDelete.confirmDelete}
-        isDeleting={docDelete.isDeleting}
-        title="Excluir documento?"
-        description="Esta ação não pode ser desfeita. O documento e todos os seus chunks serão permanentemente removidos."
       />
     </div>
   );
