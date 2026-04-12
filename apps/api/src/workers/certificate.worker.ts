@@ -37,23 +37,27 @@ Instruções obrigatórias:
 - Se um campo não existir no certificado, use null
 - Retorne SOMENTE o JSON, sem qualquer outro texto`
 
-async function extractFromImage(fileUrl: string): Promise<ExtractedCertData> {
+// Parsing instruction enviada ao LlamaParse. Dá contexto ao OCR do LlamaParse
+// sobre o tipo de documento e o formato de saída desejado, melhorando a qualidade
+// da extração em certificados escaneados e tabelas.
+const LLAMAPARSE_INSTRUCTION = `Este documento é um certificado de treinamento ou curso profissional brasileiro.
+Extraia TODO o texto visível preservando a estrutura.
+Destaque explicitamente: nome do participante/colaborador, nome do curso/treinamento, data de conclusão, data de validade/vencimento, carga horária em horas.
+Use tabelas em formato Markdown quando houver. Use cabeçalhos de nível 2 (##) para seções.
+Não invente informações — se um campo não aparecer no documento, não o inclua.`
+
+// Extrai dados a partir do texto parseado pelo LlamaParse usando GPT-4o text-only.
+// Este é o mesmo padrão do workflow n8n que estava funcionando:
+// LlamaParse (premium + parsing_instruction) → markdown → GPT-4o extrai JSON
+async function extractFromParsedText(fullText: string): Promise<ExtractedCertData> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
     max_tokens: 500,
-    temperature: 0, // deterministic — same image must always return same result
+    temperature: 0,
+    response_format: { type: 'json_object' },
     messages: [
-      {
-        role: 'system',
-        content: EXTRACTION_PROMPT,
-      },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Extraia os dados deste certificado:' },
-          { type: 'image_url', image_url: { url: fileUrl, detail: 'high' } },
-        ],
-      },
+      { role: 'system', content: EXTRACTION_PROMPT },
+      { role: 'user', content: `Extraia os dados deste certificado a partir do texto abaixo (já extraído via OCR):\n\n${fullText}` },
     ],
   })
 
@@ -61,23 +65,17 @@ async function extractFromImage(fileUrl: string): Promise<ExtractedCertData> {
   return parseExtractedJson(raw)
 }
 
-async function extractFromPdf(fileBuffer: Buffer, fileName: string): Promise<ExtractedCertData> {
-  // LlamaParse now returns LlamaPage[] — join all pages into full text
-  const pages = await parseWithLlamaParse(fileBuffer, fileName)
-  const fullText = pages.map(p => p.text).join('\n\n').slice(0, 8000)
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: 500,
-    temperature: 0,
-    messages: [
-      { role: 'system', content: EXTRACTION_PROMPT },
-      { role: 'user', content: `Extraia os dados deste certificado:\n\n${fullText}` },
-    ],
-  })
-
-  const raw = response.choices[0]?.message?.content ?? '{}'
-  return parseExtractedJson(raw)
+// Returns true when the extraction yielded no usable data at all.
+// We treat this as a failure so the frontend can surface it as an error
+// instead of leaving the certificate stuck in 'pending' with empty fields.
+function isExtractionEmpty(data: ExtractedCertData): boolean {
+  return (
+    data.employee_name === null &&
+    data.course_name === null &&
+    data.completion_date === null &&
+    data.expiry_date === null &&
+    data.hours === null
+  )
 }
 
 function parseExtractedJson(raw: string): ExtractedCertData {
@@ -92,7 +90,11 @@ function parseExtractedJson(raw: string): ExtractedCertData {
       expiry_date: isValidDate(parsed.expiry_date) ? parsed.expiry_date : null,
       hours: typeof parsed.hours === 'number' ? Math.round(parsed.hours) : null,
     }
-  } catch {
+  } catch (err) {
+    safeLog('warn', 'Failed to parse extraction JSON — returning empty', {
+      error: (err as Error).message,
+      raw: raw.slice(0, 500),
+    })
     return { employee_name: null, course_name: null, completion_date: null, expiry_date: null, hours: null }
   }
 }
@@ -114,25 +116,50 @@ export function setupCertificateWorker() {
           .update({ status: 'processing' })
           .eq('id', certificateId)
 
+        await job.updateProgress(10)
+
+        // 1. Download the file (works for both PDFs and images)
+        const fileRes = await fetch(fileUrl)
+        if (!fileRes.ok) throw new Error(`Failed to download certificate: ${fileRes.status}`)
+        const buffer = Buffer.from(await fileRes.arrayBuffer())
         await job.updateProgress(20)
 
-        const isPdf = fileName.toLowerCase().endsWith('.pdf')
-        let extracted: ExtractedCertData
+        // 2. Parse with LlamaParse (premium mode + parsing instruction)
+        //    — same approach as the working n8n workflow. Handles both PDFs and images.
+        const pages = await parseWithLlamaParse(buffer, fileName, {
+          premiumMode: true,
+          parsingInstruction: LLAMAPARSE_INSTRUCTION,
+        })
 
-        if (isPdf) {
-          // Download file buffer for LlamaParse
-          const res = await fetch(fileUrl)
-          if (!res.ok) throw new Error(`Failed to download certificate: ${res.status}`)
-          const buffer = Buffer.from(await res.arrayBuffer())
-          extracted = await extractFromPdf(buffer, fileName)
-        } else {
-          // Images: GPT-4o Vision with public URL
-          extracted = await extractFromImage(fileUrl)
+        if (pages.length === 0) {
+          throw new Error('LlamaParse não retornou nenhuma página com conteúdo')
         }
+
+        const fullText = pages.map(p => p.text).join('\n\n').slice(0, 8000)
+        safeLog('info', 'LlamaParse texto extraído', { certificateId, pages: pages.length, length: fullText.length })
+        await job.updateProgress(60)
+
+        // 3. Feed the parsed text to GPT-4o (text-only) to get structured JSON
+        const extracted = await extractFromParsedText(fullText)
 
         await job.updateProgress(80)
 
         safeLog('info', 'Certificate data extracted', { certificateId, extracted })
+
+        // If the model returned an empty object, mark the cert as error so the
+        // frontend can surface it instead of keeping the user waiting forever.
+        if (isExtractionEmpty(extracted)) {
+          safeLog('warn', 'Extraction returned empty data — marking as error', { certificateId })
+          await supabase
+            .from('processed_certificates')
+            .update({
+              status: 'error',
+              rejection_reason: 'Não foi possível extrair dados do certificado automaticamente. Tente novamente ou verifique o arquivo.',
+            })
+            .eq('id', certificateId)
+          await job.updateProgress(100)
+          return
+        }
 
         // Update record with extracted data
         await supabase
@@ -143,7 +170,7 @@ export function setupCertificateWorker() {
             completion_date: extracted.completion_date,
             expiry_date: extracted.expiry_date,
             hours: extracted.hours,
-            status: 'pending', // back to pending for admin review
+            status: 'pending', // back to pending for admin review (trigger will convert to 'expired' if expiry_date < today)
           })
           .eq('id', certificateId)
 

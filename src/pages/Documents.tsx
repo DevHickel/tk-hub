@@ -26,6 +26,15 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -155,23 +164,23 @@ function CertificatesTab() {
   const [selected, setSelected] = useState<Certificate | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [extractingId, setExtractingId] = useState<string | null>(null);
+  const [expiredDialogCert, setExpiredDialogCert] = useState<Certificate | null>(null);
+  // Set of cert IDs currently being watched (shows "Extraindo..." in UI)
+  const [watchingIds, setWatchingIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Map of certId → timeout handle for active watchers
+  const watchersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => { setPage(0); }, [search, statusFilter, expiryFilter]);
   useEffect(() => { fetchCerts(); }, [page, search, statusFilter, expiryFilter]);
 
-  // Auto-refresh while any cert is processing
+  // Cleanup all watchers on unmount
   useEffect(() => {
-    const hasProcessing = certs.some(c => c.status === 'processing');
-    if (hasProcessing && !pollRef.current) {
-      pollRef.current = setInterval(() => fetchCerts(), 5000);
-    } else if (!hasProcessing && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
-  }, [certs]);
+    return () => {
+      watchersRef.current.forEach(t => clearTimeout(t));
+      watchersRef.current.clear();
+    };
+  }, []);
 
   const fetchCerts = async () => {
     setLoading(true);
@@ -204,6 +213,76 @@ function CertificatesTab() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isExpiredByDate = (dateStr: string | null) =>
+    !!dateStr && new Date(dateStr) < new Date();
+
+  // Watch a specific cert until it reaches a terminal status.
+  // Uses recursive setTimeout to avoid stale closure / setInterval cleanup bugs.
+  const watchCert = (certId: string, attempts = 0) => {
+    const MAX_ATTEMPTS = 36; // 36 × 5s = 3 min max
+    if (attempts >= MAX_ATTEMPTS) {
+      watchersRef.current.delete(certId);
+      setWatchingIds(prev => { const s = new Set(prev); s.delete(certId); return s; });
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      watchersRef.current.delete(certId);
+
+      const { data } = await supabase
+        .from('processed_certificates')
+        .select('*')
+        .eq('id', certId)
+        .maybeSingle();
+
+      if (!data) {
+        // Cert was deleted by old trigger — show popup
+        setWatchingIds(prev => { const s = new Set(prev); s.delete(certId); return s; });
+        setExpiredDialogCert({
+          id: certId, status: 'expired', expiry_date: null,
+          employee_name: null, course_name: null, completion_date: null,
+          hours: null, file_name: null, file_url: null,
+          rejection_reason: null, created_at: null,
+        });
+        fetchCerts();
+        return;
+      }
+
+      // Worker flow: insert('pending') → 'processing' → update with data + 'pending'
+      //   (trigger converts to 'expired' if expiry_date < today)
+      // Keep waiting only if status is 'processing' OR status is 'pending' but
+      // no data has been filled in yet (worker hasn't touched the row).
+      const hasData = data.employee_name != null || data.course_name != null || data.expiry_date != null;
+      if (data.status === 'processing' || (data.status === 'pending' && !hasData)) {
+        watchCert(certId, attempts + 1);
+        return;
+      }
+
+      // Terminal status reached — remove from watching set and refresh list
+      setWatchingIds(prev => { const s = new Set(prev); s.delete(certId); return s; });
+      fetchCerts();
+
+      // Show popup if DB says expired/rejected/error, OR if expiry_date is in the past
+      // (client-side fallback in case trigger didn't fire)
+      if (
+        data.status === 'expired' ||
+        data.status === 'rejected' ||
+        data.status === 'error' ||
+        isExpiredByDate(data.expiry_date)
+      ) {
+        const effectiveStatus = data.status === 'error' ? 'error' : 'expired';
+        setExpiredDialogCert({ ...data, status: effectiveStatus } as Certificate);
+      }
+    }, 5000);
+
+    watchersRef.current.set(certId, timeout);
+  };
+
+  const startWatching = (certId: string) => {
+    setWatchingIds(prev => new Set(prev).add(certId));
+    watchCert(certId);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,7 +320,7 @@ function CertificatesTab() {
       // Trigger background AI extraction
       const { data: { session } } = await supabase.auth.getSession();
       const apiUrl = import.meta.env.VITE_API_URL;
-      await fetch(`${apiUrl}/api/certificates/${certRow.id}/extract`, {
+      const res = await fetch(`${apiUrl}/api/certificates/${certRow.id}/extract`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,
@@ -249,6 +328,18 @@ function CertificatesTab() {
         },
         body: JSON.stringify({ file_url: publicUrl, file_name: file.name }),
       });
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        console.error('Extract endpoint failed', { status: res.status, body: errText });
+        toast.error(`Falha ao iniciar extração (HTTP ${res.status}). Verifique se o backend está rodando.`);
+        await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
+        await fetchCerts();
+        return;
+      }
+
+      // Start watching this cert for terminal status (expired/rejected triggers popup)
+      startWatching(certRow.id);
 
       toast.success('Certificado enviado! Extraindo dados automaticamente...');
       await logActivity(user.id, 'certificate_uploaded', { file_name: file.name });
@@ -281,6 +372,8 @@ function CertificatesTab() {
         body: JSON.stringify({ file_url: cert.file_url, file_name: cert.file_name }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Erro ao disparar extração');
+      // Start watching this cert for terminal status
+      startWatching(cert.id);
       toast.success('Extração iniciada! Os dados serão preenchidos automaticamente.');
     } catch (err) {
       console.error(err);
@@ -291,9 +384,9 @@ function CertificatesTab() {
     }
   };
 
-  const handleDeleteCert = async (cert: Certificate, e: React.MouseEvent) => {
-    e.stopPropagation(); // prevent opening the detail sheet
-    if (!confirm(`Excluir o certificado "${cert.file_name ?? cert.course_name}"? Esta ação não pode ser desfeita.`)) return;
+  const handleDeleteCert = async (cert: Certificate, e?: React.MouseEvent, skipConfirm = false) => {
+    e?.stopPropagation(); // prevent opening the detail sheet
+    if (!skipConfirm && !confirm(`Excluir o certificado "${cert.file_name ?? cert.course_name}"? Esta ação não pode ser desfeita.`)) return;
     setDeletingId(cert.id);
     try {
       const { error } = await supabase.from('processed_certificates').delete().eq('id', cert.id);
@@ -409,10 +502,12 @@ function CertificatesTab() {
                 </TableRow>
               ) : (
                 certs.map((cert) => {
-                  const cfg = CERT_STATUS[cert.status ?? ''] ?? { label: cert.status ?? '—', variant: 'outline' as const, icon: null };
+                  const isWatching = watchingIds.has(cert.id);
+                  const effectiveStatus = isWatching ? 'processing' : (cert.status ?? '');
+                  const cfg = CERT_STATUS[effectiveStatus] ?? { label: effectiveStatus || '—', variant: 'outline' as const, icon: null };
                   const isDeleting = deletingId === cert.id;
                   const isExtracting = extractingId === cert.id;
-                  const canExtract = (cert.status === 'pending' || cert.status === 'error') && !!cert.file_url;
+                  const canExtract = !isWatching && (cert.status === 'pending' || cert.status === 'error') && !!cert.file_url;
                   return (
                     <TableRow key={cert.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(cert)}>
                       <TableCell className="font-medium">{cert.employee_name ?? '—'}</TableCell>
@@ -474,6 +569,56 @@ function CertificatesTab() {
         </div>
       )}
 
+      {/* Expired / error certificate dialog */}
+      <AlertDialog open={!!expiredDialogCert} onOpenChange={() => {}}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-destructive" />
+              {expiredDialogCert?.status === 'error'
+                ? 'Falha ao extrair dados'
+                : 'Certificado rejeitado'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-1">
+              {expiredDialogCert?.status === 'error' ? (
+                <>
+                  <span className="block">
+                    {expiredDialogCert.rejection_reason ??
+                      'Não foi possível extrair os dados deste certificado automaticamente.'}
+                  </span>
+                  <span className="block font-medium text-foreground">
+                    Verifique se o arquivo está legível e tente novamente.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="block">
+                    {expiredDialogCert?.expiry_date
+                      ? `Este certificado venceu em ${format(new Date(expiredDialogCert.expiry_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} e foi rejeitado pelo sistema.`
+                      : 'Este certificado está vencido e foi rejeitado pelo sistema.'}
+                  </span>
+                  <span className="block font-medium text-foreground">
+                    Ele não será salvo no banco de dados.
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={async () => {
+                if (expiredDialogCert) {
+                  await handleDeleteCert(expiredDialogCert, undefined, true);
+                  setExpiredDialogCert(null);
+                }
+              }}
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Detail sheet */}
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
         <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
@@ -512,7 +657,7 @@ function CertificatesTab() {
                   variant="destructive"
                   className="w-full"
                   disabled={deletingId === selected.id}
-                  onClick={(e) => handleDeleteCert(selected, e)}
+                  onClick={(e) => handleDeleteCert(selected, e, false)}
                 >
                   {deletingId === selected.id
                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -560,7 +705,8 @@ function RagTab() {
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('list_rag_documents');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.rpc as any)('list_rag_documents');
       if (error) throw error;
       const all = (data as GroupedRagDoc[]) ?? [];
       const filtered = search.trim()

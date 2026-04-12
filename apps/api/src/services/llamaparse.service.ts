@@ -1,4 +1,4 @@
-// LlamaParse — único parser de PDF do sistema (rag-pipeline/SKILL.md)
+// LlamaParse — único parser de PDF/imagem do sistema (rag-pipeline/SKILL.md)
 // Garante precisão máxima em formulários, tabelas, colunas múltiplas e scans OCR
 // Não usar pdf-parse ou qualquer alternativa
 
@@ -12,13 +12,44 @@ export interface LlamaPage {
   total: number     // total pages in document
 }
 
-export async function parseWithLlamaParse(fileBuffer: Buffer, fileName: string): Promise<LlamaPage[]> {
+export interface LlamaParseOptions {
+  premiumMode?: boolean
+  parsingInstruction?: string
+}
+
+// Infer content-type from file extension (LlamaParse aceita PDF e imagens)
+function contentTypeForFile(fileName: string): string {
+  const ext = fileName.toLowerCase().split('.').pop() ?? ''
+  switch (ext) {
+    case 'pdf':  return 'application/pdf'
+    case 'png':  return 'image/png'
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg'
+    case 'webp': return 'image/webp'
+    case 'tiff': return 'image/tiff'
+    case 'heic': return 'image/heic'
+    default:     return 'application/octet-stream'
+  }
+}
+
+export async function parseWithLlamaParse(
+  fileBuffer: Buffer,
+  fileName: string,
+  options: LlamaParseOptions = {}
+): Promise<LlamaPage[]> {
   const apiKey = process.env.LLAMAPARSE_API_KEY!
 
-  // 1. Upload do arquivo
+  // 1. Upload do arquivo — inclui premium_mode e parsing_instruction se fornecidos
   const formData = new FormData()
-  const blob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/pdf' })
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: contentTypeForFile(fileName) })
   formData.append('file', blob, fileName)
+
+  if (options.premiumMode) {
+    formData.append('premium_mode', 'true')
+  }
+  if (options.parsingInstruction) {
+    formData.append('parsing_instruction', options.parsingInstruction)
+  }
 
   const uploadRes = await fetch(`${LLAMAPARSE_API}/upload`, {
     method: 'POST',
@@ -32,7 +63,7 @@ export async function parseWithLlamaParse(fileBuffer: Buffer, fileName: string):
   }
 
   const { id: jobId } = await uploadRes.json() as { id: string }
-  safeLog('info', 'LlamaParse upload OK', { jobId })
+  safeLog('info', 'LlamaParse upload OK', { jobId, premium: !!options.premiumMode })
 
   // 2. Polling até completar (a cada 2 segundos, máximo 120s)
   for (let attempt = 0; attempt < 60; attempt++) {
