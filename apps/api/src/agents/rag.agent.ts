@@ -23,16 +23,20 @@ function sanitizeForPrompt(text: string): string {
     .slice(0, 4000) // limite por chunk
 }
 
+type HistoryMessage = { role: 'user' | 'assistant'; content: string }
+
 // Portado idêntico da Edge Function — lógica mini → 4o preservada
 async function callLLM(
   model: string,
   userMessage: string,
-  systemPrompt: string
+  systemPrompt: string,
+  history: HistoryMessage[] = []
 ): Promise<{ answer: string; tokensUsed: number }> {
   const response = await openai.chat.completions.create({
     model,
     messages: [
       { role: 'system', content: systemPrompt },
+      ...history,
       { role: 'user', content: userMessage },
     ],
     max_tokens: 1000,
@@ -47,7 +51,8 @@ async function callLLM(
 
 export async function answerQuestion(
   question: string,
-  userId: string
+  userId: string,
+  _conversationId?: string
 ): Promise<RagResult> {
   const trimmed = question.trim().slice(0, 2000) // limite de entrada
 
@@ -55,15 +60,14 @@ export async function answerQuestion(
     // 1. Embedding da pergunta — com cache (rag-pipeline/SKILL.md)
     const questionEmbedding = await getOrCreateEmbedding(trimmed)
 
-    // 2. Busca híbrida — usa função existente no banco
-    const { data: chunks, error: searchError } = await supabase.rpc('hybrid_search', {
-      query_text: trimmed,
+    // 2. match_documents — igual ao workflow n8n (Vector Store tool limit=10)
+    const { data: chunks, error: searchError } = await supabase.rpc('match_documents', {
       query_embedding: JSON.stringify(questionEmbedding),
-      match_count: 5,
+      match_count: 10,
     })
 
     if (searchError) {
-      safeLog('warn', 'hybrid_search error', { error: searchError.message })
+      safeLog('warn', 'match_documents error', { error: searchError.message })
     }
 
     // 3. Montar contexto sanitizado com metadata para citação (security/SKILL.md §4)
@@ -133,11 +137,26 @@ ${context}`
 
 *Nenhum documento relevante foi encontrado para esta pergunta. Responda com base no seu conhecimento geral sobre engenharia industrial, mas deixe claro que não há documentação interna disponível para embasar a resposta.*`
 
-    // 5. gpt-4o-mini primeiro (filosofia de custo — context.md)
-    let result = await callLLM('gpt-4o-mini', trimmed, systemPrompt)
+    // 5. Memória curta — últimos 4 turnos deste usuário (replica o nó Memory do n8n)
+    const { data: historyRows } = await supabase
+      .from('chat_history')
+      .select('question, answer')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(4)
+
+    const historyMessages: HistoryMessage[] = (historyRows ?? [])
+      .reverse()
+      .flatMap((h) => [
+        { role: 'user' as const, content: h.question },
+        { role: 'assistant' as const, content: h.answer },
+      ])
+
+    // 6. gpt-4o-mini primeiro (filosofia de custo — context.md)
+    let result = await callLLM('gpt-4o-mini', trimmed, systemPrompt, historyMessages)
     let modelUsed = 'gpt-4o-mini'
 
-    // 6. Fallback para gpt-4o se resposta vaga (portado da Edge Function)
+    // 7. Fallback para gpt-4o se resposta vaga (portado da Edge Function)
     const isVague =
       result.answer.includes('Não encontrei') ||
       result.answer.includes('não encontrei') ||
@@ -145,14 +164,14 @@ ${context}`
 
     if (isVague && context) {
       safeLog('info', 'Fallback para gpt-4o', { userId })
-      const fallback = await callLLM('gpt-4o', trimmed, systemPrompt)
+      const fallback = await callLLM('gpt-4o', trimmed, systemPrompt, historyMessages)
       if (fallback.answer.length > result.answer.length) {
         result = fallback
         modelUsed = 'gpt-4o'
       }
     }
 
-    // 7. Salvar no chat_history para analytics (adicionado vs Edge Function)
+    // 8. Salvar no chat_history para analytics (adicionado vs Edge Function)
     await supabase.from('chat_history').insert({
       user_id: userId,
       question: trimmed,

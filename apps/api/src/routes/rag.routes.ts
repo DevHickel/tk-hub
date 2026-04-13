@@ -36,11 +36,11 @@ ragRoutes.post(
   aiRateLimiter,
   zValidator('json', chatSchema),
   async (c) => {
-    const { message } = c.req.valid('json')
+    const { message, conversation_id } = c.req.valid('json')
     const userId = c.get('userId')
 
     try {
-      const { answer } = await answerQuestion(message, userId)
+      const { answer } = await answerQuestion(message, userId, conversation_id)
       return c.json({ response: answer })
     } catch (error) {
       Sentry.captureException(error, { tags: { route: '/api/chat', userId } })
