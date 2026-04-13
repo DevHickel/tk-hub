@@ -10,18 +10,21 @@ values (
 on conflict (id) do nothing;
 
 -- Allow authenticated users to upload
+drop policy if exists "Authenticated users can upload documents" on storage.objects;
 create policy "Authenticated users can upload documents"
   on storage.objects for insert
   to authenticated
   with check (bucket_id = 'documents');
 
 -- Allow public read (PDFs referenced by the RAG agent)
+drop policy if exists "Public can read documents" on storage.objects;
 create policy "Public can read documents"
   on storage.objects for select
   to public
   using (bucket_id = 'documents');
 
 -- Allow authenticated users to delete documents (admins manage via backend)
+drop policy if exists "Authenticated users can delete documents" on storage.objects;
 create policy "Authenticated users can delete documents"
   on storage.objects for delete
   to authenticated
