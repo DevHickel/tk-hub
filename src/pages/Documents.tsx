@@ -999,6 +999,7 @@ function RagTab() {
   const [uploading, setUploading] = useState(false);
   const [deletingSource, setDeletingSource] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { fetchDocs(); }, [search]);
@@ -1040,49 +1041,73 @@ function RagTab() {
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || !user) return;
 
-    if (file.type !== 'application/pdf') {
-      toast.error('Apenas arquivos PDF são aceitos para documentos RAG.');
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 20MB.');
+    const validFiles = files.filter(f => {
+      if (f.type !== 'application/pdf') {
+        toast.error(`"${f.name}" ignorado: apenas PDF é aceito.`);
+        return false;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        toast.error(`"${f.name}" ignorado: maior que 20MB.`);
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
     setUploading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const apiUrl = import.meta.env.VITE_API_URL;
+    setUploadProgress({ current: 0, total: validFiles.length });
 
-      const formData = new FormData();
-      formData.append('file', file);
+    const { data: { session } } = await supabase.auth.getSession();
+    const apiUrl = import.meta.env.VITE_API_URL;
+    let successCount = 0;
 
-      const response = await fetch(`${apiUrl}/api/upload`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session?.access_token}` },
-        body: formData,
-      });
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      setUploadProgress({ current: i + 1, total: validFiles.length });
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      const result = await response.json();
+        const response = await fetch(`${apiUrl}/api/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session?.access_token}` },
+          body: formData,
+        });
 
-      if (!response.ok) {
-        toast.error(result.error || 'Erro ao enviar documento.');
-        return;
+        const result = await response.json();
+
+        if (!response.ok) {
+          toast.error(`"${file.name}": ${result.error || 'erro ao enviar'}`);
+          continue;
+        }
+
+        await logActivity(user.id, 'rag_document_uploaded', { file_name: file.name });
+        successCount++;
+      } catch (err) {
+        console.error(err);
+        toast.error(`Erro ao enviar "${file.name}".`);
       }
-
-      toast.success('Documento enviado! Será processado em background.');
-      await logActivity(user.id, 'rag_document_uploaded', { file_name: file.name });
-      await fetchDocs();
-    } catch (err) {
-      console.error(err);
-      toast.error('Erro ao enviar documento.');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+
+    if (successCount > 0) {
+      toast.success(
+        successCount === 1
+          ? 'Documento enviado! Será processado em background.'
+          : `${successCount} documentos enviados! Serão processados em background.`
+      );
+      await fetchDocs();
+    }
+
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -1104,12 +1129,17 @@ function RagTab() {
             </Button>
             <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading ? 'Enviando...' : 'Enviar PDF'}
+              {uploading
+                ? uploadProgress.total > 1
+                  ? `Enviando ${uploadProgress.current}/${uploadProgress.total}...`
+                  : 'Enviando...'
+                : 'Enviar PDF'}
             </Button>
             <input
               ref={fileInputRef}
               type="file"
               accept=".pdf"
+              multiple
               className="hidden"
               onChange={handleUpload}
             />

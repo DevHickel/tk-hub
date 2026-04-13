@@ -1,4 +1,21 @@
--- Helper function: count distinct RAG source files
+-- Step 1: Add DMS columns to documents table (if not already added)
+ALTER TABLE public.documents
+  ADD COLUMN IF NOT EXISTS uploaded_by uuid REFERENCES auth.users(id),
+  ADD COLUMN IF NOT EXISTS file_name text,
+  ADD COLUMN IF NOT EXISTS file_path text,
+  ADD COLUMN IF NOT EXISTS file_hash text,
+  ADD COLUMN IF NOT EXISTS tipo text,
+  ADD COLUMN IF NOT EXISTS numero text,
+  ADD COLUMN IF NOT EXISTS colaborador text,
+  ADD COLUMN IF NOT EXISTS data_emissao date,
+  ADD COLUMN IF NOT EXISTS data_vencimento date,
+  ADD COLUMN IF NOT EXISTS emissor text,
+  ADD COLUMN IF NOT EXISTS source text DEFAULT 'upload',
+  ADD COLUMN IF NOT EXISTS status text DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+-- Step 2: Helper function: count distinct RAG source files
 -- New uploads use file_name; old chunks use metadata->>'source'
 CREATE OR REPLACE FUNCTION public.count_rag_documents()
 RETURNS bigint
@@ -11,7 +28,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.count_rag_documents() TO authenticated;
 
--- Helper function: list distinct RAG source files
+-- Step 3: Helper function: list distinct RAG source files
 CREATE OR REPLACE FUNCTION public.list_rag_documents()
 RETURNS TABLE(
   source_name text,
