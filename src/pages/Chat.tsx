@@ -41,6 +41,7 @@ interface Message {
   conversation_id: string;
   created_at: string;
   feedback?: 'like' | 'dislike' | null;
+  chat_history_id?: string | null;
 }
 
 interface Conversation {
@@ -172,14 +173,21 @@ export default function Chat() {
       });
 
       let aiResponse = 'Desculpe, não consegui processar sua mensagem.';
+      let chatHistoryId: string | null = null;
       if (response.ok) {
         const data = await response.json();
         aiResponse = data.response || aiResponse;
+        chatHistoryId = data.chat_history_id ?? null;
       }
 
       const { data: aiMsg } = await supabase
         .from('messages')
-        .insert({ conversation_id: conversationId, content: aiResponse, role: 'assistant' })
+        .insert({
+          conversation_id: conversationId,
+          content: aiResponse,
+          role: 'assistant',
+          chat_history_id: chatHistoryId,
+        })
         .select()
         .single();
       if (aiMsg) setMessages(prev => [...prev, { ...aiMsg, role: 'assistant' as const }]);
@@ -197,36 +205,35 @@ export default function Chat() {
   };
 
   const handleFeedback = async (messageId: string, feedback: 'like' | 'dislike') => {
-    const msgIndex = messages.findIndex(m => m.id === messageId);
-    if (msgIndex === -1) return;
-    const aiMsg = messages[msgIndex];
-    let userMsg = '';
-    for (let i = msgIndex - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') { userMsg = messages[i].content; break; }
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    if (!msg.chat_history_id) {
+      toast.error('Esta resposta não pode ser avaliada (dados de treinamento ausentes).');
+      return;
     }
+    if (!user) return;
 
     try {
-      const { data: existing } = await supabase
-        .from('knowledge_feedback')
-        .select('id')
-        .eq('pergunta_original', userMsg)
-        .eq('resposta_ia', aiMsg.content)
-        .maybeSingle();
+      const { data: { session } } = await supabase.auth.getSession();
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const res = await fetch(`${apiUrl}/api/chat/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ chat_history_id: msg.chat_history_id, feedback }),
+      });
 
-      const payload = {
-        votos_positivos: feedback === 'like' ? 1 : 0,
-        votos_negativos: feedback === 'dislike' ? 1 : 0,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (existing) {
-        await supabase.from('knowledge_feedback').update(payload).eq('id', existing.id);
-      } else {
-        await supabase.from('knowledge_feedback').insert({ pergunta_original: userMsg, resposta_ia: aiMsg.content, ...payload });
-      }
+      if (!res.ok) throw new Error(`feedback ${res.status}`);
 
       setMessages(prev => prev.map(m => m.id === messageId ? { ...m, feedback } : m));
-      toast.success('Obrigado pelo feedback!');
+      await logActivity(
+        user.id,
+        feedback === 'like' ? 'message_feedback_positive' : 'message_feedback_negative',
+        { chat_history_id: msg.chat_history_id },
+      );
+      toast.success('Obrigado pelo feedback! A IA vai aprender com isso.');
     } catch {
       toast.error('Não foi possível salvar o feedback.');
     }

@@ -11,6 +11,7 @@ interface RagResult {
   answer: string
   model: string
   tokensUsed: number
+  chatHistoryId?: string
 }
 
 // Portado idêntico da Edge Function (security/SKILL.md §4)
@@ -60,31 +61,40 @@ export async function answerQuestion(
     // 1. Embedding da pergunta — com cache (rag-pipeline/SKILL.md)
     const questionEmbedding = await getOrCreateEmbedding(trimmed)
 
-    // 2. match_documents — igual ao workflow n8n (Vector Store tool limit=10)
-    const { data: chunks, error: searchError } = await supabase.rpc('match_documents', {
-      query_embedding: JSON.stringify(questionEmbedding),
-      match_count: 10,
-    })
+    // 2. match_documents_with_feedback — retrieval com boost duplo
+    // (global no chunk + contextual por embedding da pergunta)
+    const { data: chunks, error: searchError } = await supabase.rpc(
+      'match_documents_with_feedback' as never,
+      {
+        query_embedding: JSON.stringify(questionEmbedding),
+        match_count: 10,
+      } as never
+    )
 
     if (searchError) {
-      safeLog('warn', 'match_documents error', { error: searchError.message })
+      safeLog('warn', 'match_documents_with_feedback error', { error: searchError.message })
     }
 
-    // 3. Filtrar por similarity mínima + ordenar desc + numerar chunks
-    // O LLM deve citar pelo Chunk #1 (mais relevante), não pela média
+    // 3. Filtrar por similarity efetiva mínima + já vem ordenado da RPC
     const MIN_SIMILARITY = 0.4
     const ranked = ((chunks as Array<{
+      id: number
       content: string
       metadata?: Record<string, unknown>
       similarity?: number
-    }>) ?? [])
-      .filter((c) => (c.similarity ?? 0) >= MIN_SIMILARITY)
-      .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+      base_similarity?: number
+      global_boost?: number
+      contextual_boost?: number
+      feedback_score?: number
+    }>) ?? []).filter((c) => (c.similarity ?? 0) >= MIN_SIMILARITY)
 
     safeLog('info', 'chunks retrieved', {
       total: chunks?.length ?? 0,
       afterFilter: ranked.length,
       topSim: ranked[0]?.similarity,
+      topBase: ranked[0]?.base_similarity,
+      topGlobalBoost: ranked[0]?.global_boost,
+      topContextBoost: ranked[0]?.contextual_boost,
     })
 
     const context = ranked
@@ -201,17 +211,33 @@ ${context}`
       }
     }
 
-    // 8. Salvar no chat_history para analytics (adicionado vs Edge Function)
-    await supabase.from('chat_history').insert({
-      user_id: userId,
-      question: trimmed,
-      answer: result.answer,
-      chunks_used: chunks ? JSON.stringify((chunks as Array<{ id: unknown }>).map((c) => c.id)) : null,
-      model_used: modelUsed,
-      tokens_used: result.tokensUsed,
-    })
+    // 8. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro
+    // (não os 10 brutos). Isso mantém o loop de feedback preciso.
+    const usedChunkIds = ranked.map((c) => c.id).filter((id): id is number => typeof id === 'number')
 
-    return { answer: result.answer, model: modelUsed, tokensUsed: result.tokensUsed }
+    const { data: histRow, error: histError } = await supabase
+      .from('chat_history')
+      .insert({
+        user_id: userId,
+        question: trimmed,
+        answer: result.answer,
+        chunks_used: usedChunkIds,
+        model_used: modelUsed,
+        tokens_used: result.tokensUsed,
+      })
+      .select('id')
+      .single()
+
+    if (histError) {
+      safeLog('warn', 'chat_history insert error', { error: histError.message })
+    }
+
+    return {
+      answer: result.answer,
+      model: modelUsed,
+      tokensUsed: result.tokensUsed,
+      chatHistoryId: histRow?.id as string | undefined,
+    }
   } catch (error) {
     Sentry.captureException(error, { tags: { agent: 'rag', userId } })
     throw error

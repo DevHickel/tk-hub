@@ -2,6 +2,8 @@ import { supabase } from '@/integrations/supabase/client'
 
 export type ActivityAction =
   | 'message_sent'
+  | 'message_feedback_positive'
+  | 'message_feedback_negative'
   | 'invite_sent'
   | 'certificate_uploaded'
   | 'rag_document_uploaded'
@@ -31,6 +33,8 @@ export async function logActivity(
 /** Maps action keys to human-readable Portuguese labels */
 export const ACTION_LABELS: Record<string, string> = {
   message_sent: 'Enviou mensagem no assistente',
+  message_feedback_positive: 'Avaliou resposta como útil',
+  message_feedback_negative: 'Avaliou resposta como não útil',
   invite_sent: 'Enviou convite de registro',
   certificate_uploaded: 'Enviou certificado',
   rag_document_uploaded: 'Enviou documento para IA',

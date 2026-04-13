@@ -4,6 +4,7 @@ import { rateLimiter } from 'hono-rate-limiter'
 import { z } from 'zod'
 import * as Sentry from '@sentry/node'
 import { answerQuestion } from '../agents/rag.agent.js'
+import { getOrCreateEmbedding } from '../services/embedding.service.js'
 import { pdfQueue } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { safeLog } from '../lib/logger.js'
@@ -40,11 +41,69 @@ ragRoutes.post(
     const userId = c.get('userId')
 
     try {
-      const { answer } = await answerQuestion(message, userId, conversation_id)
-      return c.json({ response: answer })
+      const { answer, chatHistoryId } = await answerQuestion(message, userId, conversation_id)
+      return c.json({ response: answer, chat_history_id: chatHistoryId })
     } catch (error) {
       Sentry.captureException(error, { tags: { route: '/api/chat', userId } })
       safeLog('error', 'Erro no /api/chat', { error: (error as Error).message })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  }
+)
+
+// ── POST /api/chat/feedback ────────────────────────────────────────────────
+// Aplica feedback 👍/👎 numa resposta do TKzinho. Treina o ranking retroativamente.
+const feedbackSchema = z.object({
+  chat_history_id: z.string().uuid(),
+  feedback: z.enum(['like', 'dislike']),
+})
+
+ragRoutes.post(
+  '/chat/feedback',
+  aiRateLimiter,
+  zValidator('json', feedbackSchema),
+  async (c) => {
+    const { chat_history_id, feedback } = c.req.valid('json')
+    const userId = c.get('userId')
+    const score: 1 | -1 = feedback === 'like' ? 1 : -1
+
+    try {
+      // 1. Carrega a row e valida ownership
+      const { data: hist, error: histError } = await supabase
+        .from('chat_history')
+        .select('question, chunks_used, user_id')
+        .eq('id', chat_history_id)
+        .single()
+
+      if (histError || !hist) return c.json({ error: 'not found' }, 404)
+      if (hist.user_id !== userId) return c.json({ error: 'forbidden' }, 403)
+
+      const chunkIds = (hist.chunks_used as number[] | null) ?? []
+      if (chunkIds.length === 0) {
+        return c.json({ error: 'Esta resposta não pode ser avaliada (sem chunks)' }, 400)
+      }
+
+      // 2. Reusa embedding cacheado da pergunta — zero custo se cache hit
+      const questionEmbedding = await getOrCreateEmbedding(hist.question)
+      const questionHash = crypto.createHash('sha256').update(hist.question).digest('hex')
+
+      // 3. Aplica via RPC atômica
+      const { error: rpcError } = await supabase.rpc('apply_chunk_feedback' as never, {
+        p_chunk_ids: chunkIds,
+        p_user_id: userId,
+        p_question: hist.question,
+        p_question_hash: questionHash,
+        p_question_embedding: JSON.stringify(questionEmbedding),
+        p_score: score,
+      } as never)
+
+      if (rpcError) throw rpcError
+
+      safeLog('info', 'feedback aplicado', { userId, chat_history_id, feedback, chunks: chunkIds.length })
+      return c.json({ success: true })
+    } catch (error) {
+      Sentry.captureException(error, { tags: { route: '/api/chat/feedback', userId } })
+      safeLog('error', 'Erro no /api/chat/feedback', { error: (error as Error).message })
       return c.json({ error: 'Internal server error' }, 500)
     }
   }
