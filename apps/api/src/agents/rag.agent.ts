@@ -70,16 +70,33 @@ export async function answerQuestion(
       safeLog('warn', 'match_documents error', { error: searchError.message })
     }
 
-    // 3. Montar contexto sanitizado com metadata para citação (security/SKILL.md §4)
-    const context = ((chunks as Array<{ content: string; metadata?: Record<string, unknown> }>) ?? [])
-      .map((chunk) => {
+    // 3. Filtrar por similarity mínima + ordenar desc + numerar chunks
+    // O LLM deve citar pelo Chunk #1 (mais relevante), não pela média
+    const MIN_SIMILARITY = 0.4
+    const ranked = ((chunks as Array<{
+      content: string
+      metadata?: Record<string, unknown>
+      similarity?: number
+    }>) ?? [])
+      .filter((c) => (c.similarity ?? 0) >= MIN_SIMILARITY)
+      .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+
+    safeLog('info', 'chunks retrieved', {
+      total: chunks?.length ?? 0,
+      afterFilter: ranked.length,
+      topSim: ranked[0]?.similarity,
+    })
+
+    const context = ranked
+      .map((chunk, i) => {
         const source = (chunk.metadata?.source as string) ?? 'desconhecido'
         const page = (chunk.metadata?.page_number ?? chunk.metadata?.page ?? '') as string | number
-        const header = `[Fonte: ${source}${page ? ` | Pág. ${page}` : ''}]`
+        const sim = (chunk.similarity ?? 0).toFixed(2)
+        const header = `[Chunk #${i + 1} | relevância ${sim} | Fonte: ${source}${page ? ` | Pág. ${page}` : ''}]`
         return `${header}\n${sanitizeForPrompt(chunk.content)}`
       })
       .join('\n\n---\n\n')
-      .slice(0, 10000) // limite total do contexto
+      .slice(0, 10000)
 
     // 4. System prompt do agente TKzinho
     const basePrompt = `# 1. IDENTIDADE E PERSONA
@@ -125,15 +142,21 @@ Ao analisar o CONTEXTO, decida qual arquivo priorizar com base no nome do arquiv
    * **Para Critérios/Tabelas:** Breve introdução + bullets ou tabela Markdown limpa + frase explicando como aplicar o critério na prática.
 
 # 7. PROTOCOLO DE CITAÇÃO (OBRIGATÓRIO)
-Todo chunk no CONTEXTO começa com um cabeçalho no formato exato: \`[Fonte: NOME_DO_ARQUIVO | Pág. N]\`.
-Ao final de toda resposta técnica, copie **literalmente** o valor de "NOME_DO_ARQUIVO" e "N" do chunk que você usou, adicionando:
+Todo chunk no CONTEXTO começa com um cabeçalho no formato exato:
+\`[Chunk #N | relevância 0.XX | Fonte: NOME_DO_ARQUIVO | Pág. P]\`
+
+Os chunks vêm **ordenados do mais relevante (#1) para o menos relevante**. O **Chunk #1** é quase sempre o que tem a resposta.
+
+Ao final de toda resposta técnica, adicione:
 ---
-📍 **Fonte:** Documento *NOME_DO_ARQUIVO* | Pág. *N*
+📍 **Fonte:** Documento *NOME_DO_ARQUIVO* | Pág. *P*
 
 REGRAS CRÍTICAS DA CITAÇÃO:
-- NUNCA invente nomes de documento. Use exatamente o valor após "Fonte:" no cabeçalho do chunk (ex: \`FD-TKS-QUA-001.pdf\`, \`PR-TKS-QUA-003.pdf\`).
-- NUNCA use o código do documento (ex: "003", "001") como número de página — o número de página é o valor após "Pág." no cabeçalho.
-- Se usou múltiplos chunks do mesmo documento em páginas diferentes, liste cada página: *Pág. 3, 5*.`
+1. **Identifique o chunk que de fato respondeu** à pergunta (normalmente #1). Cite a Pág. **DESSE chunk** — não a página de qualquer chunk do contexto.
+2. Copie **literalmente** o NOME_DO_ARQUIVO e o número após "Pág." do cabeçalho do chunk escolhido. NUNCA invente.
+3. NUNCA use o código do documento (ex: "003", "001") como número de página. O número de página é **apenas** o valor após "Pág." no cabeçalho.
+4. Se a resposta usou dois chunks do mesmo arquivo em páginas distintas (ex: #1 Pág. 5 e #2 Pág. 6), liste ambas: *Pág. 5, 6*.
+5. Se usou chunks de arquivos diferentes, liste cada fonte numa linha separada após o 📍.`
 
     const systemPrompt = context
       ? `${basePrompt}

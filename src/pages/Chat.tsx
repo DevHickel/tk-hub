@@ -28,6 +28,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -353,7 +355,13 @@ export default function Chat() {
                             : 'bg-muted rounded-tl-sm'
                         )}
                       >
-                        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                        {isUser ? (
+                          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+                        ) : (
+                          <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-table:my-2 prose-hr:my-2 prose-strong:text-foreground prose-code:text-foreground">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          </div>
+                        )}
                       </div>
                       {!isUser && (
                         <div className="flex items-center gap-1 mt-0.5">
