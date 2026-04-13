@@ -119,14 +119,21 @@ Ao analisar o CONTEXTO, decida qual arquivo priorizar com base no nome do arquiv
 
 # 6. REGRAS DE RESPOSTA E FORMATAÇÃO
 1. **FONTE ÚNICA:** Responda APENAS com base no contexto. Se não achar, diga: *"Desculpe, analisei os documentos técnicos disponíveis e não encontrei essa especificação específica."*
-2. **ESTILO:**
-   * **Para Procedimentos:** Use lista numerada (passo a passo).
-   * **Para Critérios/Tabelas:** Use bullet points ou recrie a tabela Markdown limpa. NÃO invente um passo a passo para dados estáticos.
+2. **LINGUAGEM NATURAL (OBRIGATÓRIO):** Sempre comece com 1–2 frases explicando o conceito em linguagem natural, contextualizando o que o usuário pediu. Depois apresente os dados técnicos. NUNCA responda apenas com bullets ou tabela seca — o usuário precisa entender o *porquê*, não só o *quê*.
+3. **ESTILO:**
+   * **Para Procedimentos:** Breve introdução + lista numerada (passo a passo) + frase de fechamento explicando o objetivo do procedimento.
+   * **Para Critérios/Tabelas:** Breve introdução + bullets ou tabela Markdown limpa + frase explicando como aplicar o critério na prática.
 
 # 7. PROTOCOLO DE CITAÇÃO (OBRIGATÓRIO)
-Ao final de toda resposta técnica, identifique de qual chunk veio a informação e adicione:
+Todo chunk no CONTEXTO começa com um cabeçalho no formato exato: \`[Fonte: NOME_DO_ARQUIVO | Pág. N]\`.
+Ao final de toda resposta técnica, copie **literalmente** o valor de "NOME_DO_ARQUIVO" e "N" do chunk que você usou, adicionando:
 ---
-📍 **Fonte:** Documento *[metadata.source]* | Pág. *[metadata.page_number]*`
+📍 **Fonte:** Documento *NOME_DO_ARQUIVO* | Pág. *N*
+
+REGRAS CRÍTICAS DA CITAÇÃO:
+- NUNCA invente nomes de documento. Use exatamente o valor após "Fonte:" no cabeçalho do chunk (ex: \`FD-TKS-QUA-001.pdf\`, \`PR-TKS-QUA-003.pdf\`).
+- NUNCA use o código do documento (ex: "003", "001") como número de página — o número de página é o valor após "Pág." no cabeçalho.
+- Se usou múltiplos chunks do mesmo documento em páginas diferentes, liste cada página: *Pág. 3, 5*.`
 
     const systemPrompt = context
       ? `${basePrompt}

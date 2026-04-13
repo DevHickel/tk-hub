@@ -1,4 +1,6 @@
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -63,7 +65,13 @@ export function ChatMessage({
             ? 'bg-chat-user text-chat-user-foreground rounded-tr-sm' 
             : 'bg-chat-ai text-chat-ai-foreground rounded-tl-sm'
         )}>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
+          {isUser ? (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{content}</p>
+          ) : (
+            <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-table:my-2 prose-hr:my-2 prose-strong:text-chat-ai-foreground">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+            </div>
+          )}
         </div>
 
         {!isUser && onFeedback && (
