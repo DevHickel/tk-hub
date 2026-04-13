@@ -57,54 +57,85 @@ export function chunkText(text: string, size = 500, overlap = 50): string[] {
 
 // Splitter recursivo markdown-aware — replica LangChain RecursiveCharacterTextSplitter
 // com splitCode='markdown', igual ao workflow n8n original.
-// Separadores tentados em ordem: cabeçalhos → parágrafos → linhas → espaços → char.
-const MARKDOWN_SEPARATORS = ['\n## ', '\n### ', '\n#### ', '\n\n', '\n', ' ', '']
+// Separadores na mesma ordem do LangChain (markdown), usando regex para cobrir
+// cabeçalhos de todos os níveis (h1–h6), code fences e horizontal rules.
+const MARKDOWN_SEPARATORS: RegExp[] = [
+  /\n#{1,6} /,      // headings h1 a h6
+  /```\n/,          // code fence close
+  /\n\*\*\*+\n/,    // *** horizontal rule
+  /\n---+\n/,       // --- horizontal rule
+  /\n___+\n/,       // ___ horizontal rule
+  /\n\n/,           // parágrafo
+  /\n/,             // linha
+  / /,              // espaço
+]
+
+function mergeSplits(splits: string[], separator: string, size: number, overlap: number): string[] {
+  const out: string[] = []
+  let current: string[] = []
+  let currentLen = 0
+  const sepLen = separator.length
+
+  for (const s of splits) {
+    const sLen = s.length
+    // Se adicionar esta parte estoura o size, fecha o chunk atual
+    if (currentLen + (current.length > 0 ? sepLen : 0) + sLen > size && current.length > 0) {
+      out.push(current.join(separator))
+      // Aplica overlap: mantém as últimas partes até somar ~overlap chars
+      while (currentLen > overlap && current.length > 0) {
+        currentLen -= current[0].length + (current.length > 1 ? sepLen : 0)
+        current.shift()
+      }
+    }
+    current.push(s)
+    currentLen += sLen + (current.length > 1 ? sepLen : 0)
+  }
+  if (current.length > 0) out.push(current.join(separator))
+  return out.map(c => c.trim()).filter(Boolean)
+}
 
 export function chunkMarkdown(text: string, size = 5000, overlap = 500): string[] {
   if (!text.trim()) return []
-  if (text.length <= size) return [text]
 
-  const split = (input: string, sepIdx: number): string[] => {
-    if (input.length <= size) return [input]
-    const sep = MARKDOWN_SEPARATORS[sepIdx]
-    if (sep === '') {
+  const splitRecursive = (input: string, sepIdx: number): string[] => {
+    if (sepIdx >= MARKDOWN_SEPARATORS.length) {
+      // fallback char-level
       const out: string[] = []
       for (let i = 0; i < input.length; i += size - overlap) {
         out.push(input.slice(i, i + size))
       }
       return out
     }
-    const parts = input.split(sep)
-    const out: string[] = []
-    let buf = ''
+
+    const sepRe = MARKDOWN_SEPARATORS[sepIdx]
+    // Se o separador não está presente, desce para o próximo
+    if (!sepRe.test(input)) return splitRecursive(input, sepIdx + 1)
+
+    // Usa um split que mantém o separador conceitualmente (usamos o match como
+    // delimitador e perdemos o literal, como faz a versão original do LangChain.js)
+    const parts = input.split(new RegExp(sepRe.source, 'g'))
+    const goodSplits: string[] = []
+    const finalChunks: string[] = []
+
     for (const part of parts) {
-      const piece = buf ? buf + sep + part : part
-      if (piece.length <= size) {
-        buf = piece
+      if (part.length < size) {
+        goodSplits.push(part)
       } else {
-        if (buf) out.push(buf)
-        if (part.length > size) {
-          out.push(...split(part, sepIdx + 1))
-          buf = ''
-        } else {
-          buf = part
+        if (goodSplits.length > 0) {
+          finalChunks.push(...mergeSplits(goodSplits, '\n', size, overlap))
+          goodSplits.length = 0
         }
+        // Recurse com próximo separador
+        finalChunks.push(...splitRecursive(part, sepIdx + 1))
       }
     }
-    if (buf) out.push(buf)
-    return out
+    if (goodSplits.length > 0) {
+      finalChunks.push(...mergeSplits(goodSplits, '\n', size, overlap))
+    }
+    return finalChunks
   }
 
-  const raw = split(text, 0)
-  if (overlap <= 0 || raw.length <= 1) return raw.map(c => c.trim()).filter(Boolean)
-
-  const withOverlap: string[] = [raw[0]]
-  for (let i = 1; i < raw.length; i++) {
-    const prev = raw[i - 1]
-    const tail = prev.slice(Math.max(0, prev.length - overlap))
-    withOverlap.push((tail + raw[i]).slice(0, size))
-  }
-  return withOverlap.map(c => c.trim()).filter(Boolean)
+  return splitRecursive(text, 0).map(c => c.trim()).filter(Boolean)
 }
 
 // Chunking por caracteres — legado (só parágrafos). Mantido para compatibilidade.
