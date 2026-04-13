@@ -55,7 +55,59 @@ export function chunkText(text: string, size = 500, overlap = 50): string[] {
   return chunks
 }
 
-// Chunking por caracteres — igual ao n8n (5000 chars, 500 overlap, respeita parágrafos)
+// Splitter recursivo markdown-aware — replica LangChain RecursiveCharacterTextSplitter
+// com splitCode='markdown', igual ao workflow n8n original.
+// Separadores tentados em ordem: cabeçalhos → parágrafos → linhas → espaços → char.
+const MARKDOWN_SEPARATORS = ['\n## ', '\n### ', '\n#### ', '\n\n', '\n', ' ', '']
+
+export function chunkMarkdown(text: string, size = 5000, overlap = 500): string[] {
+  if (!text.trim()) return []
+  if (text.length <= size) return [text]
+
+  const split = (input: string, sepIdx: number): string[] => {
+    if (input.length <= size) return [input]
+    const sep = MARKDOWN_SEPARATORS[sepIdx]
+    if (sep === '') {
+      const out: string[] = []
+      for (let i = 0; i < input.length; i += size - overlap) {
+        out.push(input.slice(i, i + size))
+      }
+      return out
+    }
+    const parts = input.split(sep)
+    const out: string[] = []
+    let buf = ''
+    for (const part of parts) {
+      const piece = buf ? buf + sep + part : part
+      if (piece.length <= size) {
+        buf = piece
+      } else {
+        if (buf) out.push(buf)
+        if (part.length > size) {
+          out.push(...split(part, sepIdx + 1))
+          buf = ''
+        } else {
+          buf = part
+        }
+      }
+    }
+    if (buf) out.push(buf)
+    return out
+  }
+
+  const raw = split(text, 0)
+  if (overlap <= 0 || raw.length <= 1) return raw.map(c => c.trim()).filter(Boolean)
+
+  const withOverlap: string[] = [raw[0]]
+  for (let i = 1; i < raw.length; i++) {
+    const prev = raw[i - 1]
+    const tail = prev.slice(Math.max(0, prev.length - overlap))
+    withOverlap.push((tail + raw[i]).slice(0, size))
+  }
+  return withOverlap.map(c => c.trim()).filter(Boolean)
+}
+
+// Chunking por caracteres — legado (só parágrafos). Mantido para compatibilidade.
 export function chunkTextByChars(text: string, size = 5000, overlap = 500): string[] {
   if (text.length <= size) return [text]
   const chunks: string[] = []

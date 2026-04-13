@@ -5,8 +5,16 @@ import { QUEUES } from '../queues/index.js'
 import { PdfJobData } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { parseWithLlamaParse } from '../services/llamaparse.service.js'
-import { getOrCreateEmbedding, chunkTextByChars } from '../services/embedding.service.js'
+import { getOrCreateEmbedding, chunkMarkdown } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
+
+// Parsing instruction para o LlamaParse — documentos RAG precisam preservar
+// estrutura markdown (tabelas, cabeçalhos) para o chunker recursivo funcionar.
+const LLAMAPARSE_INSTRUCTION = `Este documento será usado como base de conhecimento para um assistente de IA.
+Extraia TODO o texto visível preservando a estrutura original.
+Use cabeçalhos markdown (##, ###) para seções.
+Converta tabelas em formato Markdown (| coluna | coluna |) — nunca achate tabelas em texto corrido.
+Preserve listas, parágrafos e rodapés. Não invente informações.`
 
 async function setDocumentStatus(documentId: string, status: string) {
   await supabase
@@ -36,8 +44,11 @@ export function setupPdfWorker() {
         const buffer = Buffer.from(await fileData.arrayBuffer())
         await job.updateProgress(20)
 
-        // 3. Extrair texto com LlamaParse — retorna pages com page_number
-        const pages = await parseWithLlamaParse(buffer, fileName)
+        // 3. Extrair texto com LlamaParse (premium + instruction — igual ao workflow n8n)
+        const pages = await parseWithLlamaParse(buffer, fileName, {
+          premiumMode: true,
+          parsingInstruction: LLAMAPARSE_INSTRUCTION,
+        })
         await job.updateProgress(40)
 
         safeLog('info', 'LlamaParse retornou páginas', { documentId, pages: pages.length })
@@ -54,7 +65,7 @@ export function setupPdfWorker() {
 
         for (let pi = 0; pi < pages.length; pi++) {
           const pageData = pages[pi]
-          const chunks = chunkTextByChars(pageData.text)
+          const chunks = chunkMarkdown(pageData.text, 5000, 500)
 
           for (let ci = 0; ci < chunks.length; ci++) {
             const chunk = chunks[ci]
