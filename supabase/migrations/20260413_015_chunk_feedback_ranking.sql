@@ -2,6 +2,37 @@
 -- Boost duplo: global (barato, sempre ativo) + contextual (por embedding da pergunta)
 
 -- ============================================================================
+-- 0. Garantir que chat_history existe (migration 004 pode não ter rodado)
+-- ============================================================================
+create table if not exists public.chat_history (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id),
+  question text not null,
+  answer text not null,
+  chunks_used jsonb,
+  model_used text,
+  tokens_used int,
+  created_at timestamptz default now()
+);
+
+create index if not exists chat_history_user_id_idx
+  on public.chat_history (user_id);
+
+alter table public.chat_history enable row level security;
+
+drop policy if exists "authenticated read chat_history" on public.chat_history;
+create policy "authenticated read chat_history"
+  on public.chat_history
+  for select
+  using (auth.role() = 'authenticated');
+
+drop policy if exists "authenticated insert chat_history" on public.chat_history;
+create policy "authenticated insert chat_history"
+  on public.chat_history
+  for insert
+  with check (auth.role() = 'authenticated');
+
+-- ============================================================================
 -- A. Score global agregado no chunk
 -- ============================================================================
 alter table public.documents
