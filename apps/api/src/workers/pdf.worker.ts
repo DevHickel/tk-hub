@@ -86,6 +86,7 @@ export function setupPdfWorker() {
         const pages = await parseWithLlamaParse(buffer, fileName, {
           premiumMode: true,
           parsingInstruction: LLAMAPARSE_INSTRUCTION,
+          outputTablesAsHTML: true,
         })
         await job.updateProgress(40)
 
@@ -106,7 +107,7 @@ export function setupPdfWorker() {
           // Normalização LLM: reestrutura células de tabela com múltiplos
           // subtítulos em headings markdown, para o chunker conseguir isolá-los.
           const normalizedText = await normalizeMarkdown(pageData.text, pageData.page)
-          const chunks = chunkMarkdown(normalizedText, 5000, 500)
+          const chunks = chunkMarkdown(normalizedText, 2500, 250)
 
           for (let ci = 0; ci < chunks.length; ci++) {
             const chunk = chunks[ci]

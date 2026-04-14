@@ -15,6 +15,7 @@ export interface LlamaPage {
 export interface LlamaParseOptions {
   premiumMode?: boolean
   parsingInstruction?: string
+  outputTablesAsHTML?: boolean
 }
 
 // Infer content-type from file extension (LlamaParse aceita PDF e imagens)
@@ -49,6 +50,10 @@ export async function parseWithLlamaParse(
   }
   if (options.parsingInstruction) {
     formData.append('parsing_instruction', options.parsingInstruction)
+  }
+  if (options.outputTablesAsHTML) {
+    // Preserva colspan/rowspan — crítico para células com múltiplos subtítulos
+    formData.append('output_tables_as_HTML', 'true')
   }
 
   const uploadRes = await fetch(`${LLAMAPARSE_API}/upload`, {

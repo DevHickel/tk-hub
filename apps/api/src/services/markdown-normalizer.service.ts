@@ -14,8 +14,10 @@ import { safeLog } from '../lib/logger.js'
 const SYSTEM_PROMPT = `Você é um normalizador de markdown técnico. Recebe o markdown bruto de UMA página de um documento de engenharia e retorna a MESMA página reestruturada para ser consumida por um sistema RAG.
 
 REGRAS ABSOLUTAS:
+0. O input PODE CONTER tabelas em HTML (<table>, <tr>, <td>, com colspan/rowspan) misturadas com markdown. Trate a estrutura HTML como SOURCE OF TRUTH para quem pertence a quê. \`rowspan="N"\` indica que a célula da esquerda rege as N linhas seguintes (ex: <td rowspan="3">Esquadro</td> significa que as 3 linhas (<tr>) seguintes são todos subtítulos de "Esquadro"). Cada <tr> dentro desse grupo é um subtítulo independente — suas fórmulas/valores NUNCA se aplicam aos outros <tr>.
 1. Preserve TODO o conteúdo do original. Não resuma, não reescreva, não remova informações. Apenas reestruture.
-2. Se uma célula de tabela contiver múltiplos subtítulos (ex: "Esquadro Combinado", "Esquadro 90° Para Esquadros de Precisão", "Para Esquadro Simples"), EXTRAIA cada subtítulo da tabela e emita como heading markdown "### NOME DO SUBTÍTULO" FORA da tabela, seguido das fórmulas/valores daquele subtítulo em bullets ou parágrafo.
+2. Para tabelas com rowspan/colspan (HTML): cada <tr> dentro de um grupo regido por rowspan vira seu próprio heading "### NOME DO SUBTÍTULO" com os valores daquela linha como bullets. A linha-mãe (cabeçalho do rowspan, ex: "Esquadro") vira "## NOME". As fórmulas de um <tr> NUNCA aparecem sob outro <tr>.
+2b. Para markdown achatado com múltiplos subtítulos numa mesma célula/parágrafo: EXTRAIA cada subtítulo identificável e emita como "### NOME" com os valores daquele subtítulo em bullets.
 3. A linha-mãe da tabela (ex: "Esquadro", "Paquímetro") vira heading "## NOME". Cada sub-equipamento vira "### NOME".
 4. Tabelas simples (uma única linha de dados por equipamento, sem subtítulos internos) devem ser convertidas em blocos: "## Equipamento" + bullets.
 5. Se um subtítulo tiver notas/referências cruzadas (ex: "Aferição na obra ver PR-TKS-QUA-003", "Calibração externa", "Ver tabela 07", "Validade: 1 ano"), inclua essas notas como bullets do subtítulo — NUNCA omita.
