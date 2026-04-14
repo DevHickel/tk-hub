@@ -5,6 +5,7 @@ import { QUEUES } from '../queues/index.js'
 import { PdfJobData } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { parseWithLlamaParse } from '../services/llamaparse.service.js'
+import { normalizeMarkdown } from '../services/markdown-normalizer.service.js'
 import { getOrCreateEmbedding, chunkMarkdown } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
 
@@ -102,7 +103,10 @@ export function setupPdfWorker() {
 
         for (let pi = 0; pi < pages.length; pi++) {
           const pageData = pages[pi]
-          const chunks = chunkMarkdown(pageData.text, 5000, 500)
+          // Normalização LLM: reestrutura células de tabela com múltiplos
+          // subtítulos em headings markdown, para o chunker conseguir isolá-los.
+          const normalizedText = await normalizeMarkdown(pageData.text, pageData.page)
+          const chunks = chunkMarkdown(normalizedText, 5000, 500)
 
           for (let ci = 0; ci < chunks.length; ci++) {
             const chunk = chunks[ci]
