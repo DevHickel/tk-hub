@@ -101,8 +101,9 @@ export async function answerQuestion(
       .map((chunk, i) => {
         const source = (chunk.metadata?.source as string) ?? 'desconhecido'
         const page = (chunk.metadata?.page_number ?? chunk.metadata?.page ?? '') as string | number
+        const section = chunk.metadata?.section as string | undefined
         const sim = (chunk.similarity ?? 0).toFixed(2)
-        const header = `[Chunk #${i + 1} | relevância ${sim} | Fonte: ${source}${page ? ` | Pág. ${page}` : ''}]`
+        const header = `[Chunk #${i + 1} | relevância ${sim} | Fonte: ${source}${page ? ` | Pág. ${page}` : ''}${section ? ` | Seção: ${section}` : ''}]`
         return `${header}\n${sanitizeForPrompt(chunk.content)}`
       })
       .join('\n\n---\n\n')
@@ -163,9 +164,12 @@ Ao analisar o CONTEXTO, decida qual arquivo priorizar com base no nome do arquiv
 
 # 7. PROTOCOLO DE CITAÇÃO (OBRIGATÓRIO)
 Todo chunk no CONTEXTO começa com um cabeçalho no formato exato:
-\`[Chunk #N | relevância 0.XX | Fonte: NOME_DO_ARQUIVO | Pág. P]\`
+\`[Chunk #N | relevância 0.XX | Fonte: NOME_DO_ARQUIVO | Pág. P | Seção: NOME_SEÇÃO]\`
+(o campo \`Seção\` pode não aparecer em documentos antigos).
 
 Os chunks vêm **ordenados do mais relevante (#1) para o menos relevante**. O **Chunk #1** é quase sempre o que tem a resposta.
+
+**REGRA CRÍTICA DA SEÇÃO:** Se o cabeçalho trouxer \`Seção: X\`, trate aquele chunk como contendo **APENAS** dados da seção X. NUNCA importe fórmulas, valores ou regras de chunks com outra \`Seção:\` para responder sobre a seção X (e vice-versa). Se a pergunta é sobre "Esquadro Combinado" e existe um chunk com \`Seção: Esquadro Combinado\`, use SOMENTE aquele — ignore chunks com \`Seção: Esquadro 90°...\` ou qualquer outra.
 
 Ao final de toda resposta técnica, adicione:
 ---

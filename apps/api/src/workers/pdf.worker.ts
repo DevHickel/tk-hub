@@ -10,11 +10,48 @@ import { safeLog } from '../lib/logger.js'
 
 // Parsing instruction para o LlamaParse — documentos RAG precisam preservar
 // estrutura markdown (tabelas, cabeçalhos) para o chunker recursivo funcionar.
-const LLAMAPARSE_INSTRUCTION = `Este documento será usado como base de conhecimento para um assistente de IA.
+const LLAMAPARSE_INSTRUCTION = `Este documento será usado como base de conhecimento para IA técnica.
 Extraia TODO o texto visível preservando a estrutura original.
-Use cabeçalhos markdown (##, ###) para seções.
-Converta tabelas em formato Markdown (| coluna | coluna |) — nunca achate tabelas em texto corrido.
-Preserve listas, parágrafos e rodapés. Não invente informações.`
+
+REGRA CRÍTICA — TABELAS COM SUBTÍTULOS:
+Quando uma célula de tabela contiver múltiplos subtítulos (ex: "Esquadro Combinado",
+"Esquadro 90° Para Esquadros de Precisão", "Para Esquadro Simples"), NÃO coloque tudo
+numa única célula. EMITA cada subtítulo como heading markdown ### FORA da tabela, com
+as fórmulas/valores daquele subtítulo em bullets ou parágrafo abaixo. A linha-mãe da
+tabela (ex: "Esquadro") vira ## e cada sub-equipamento um ### abaixo dela.
+
+Exemplo:
+## Esquadro
+
+### Esquadro Combinado
+- Ortogonalidade: ε = 10 + L/60 (µm), onde L = comprimento da régua em mm
+- Deslocamento angular do goniômetro: 0° 30'
+
+### Esquadro 90° Para Esquadros de Precisão
+- Ortogonalidade/Retilineidade: t = 20 + Li/10 (µm)
+- Planicidade ou Retilineidade: r = 4 + Li/50 (µm), onde Li = comprimento em mm
+
+### Para Esquadro Simples
+- Não se mede Planicidade ou Retilineidade
+- Tolerância da Ortogonalidade: 15' (quinze minutos)
+
+Use cabeçalhos markdown (##, ###) para seções e sub-equipamentos.
+Converta tabelas simples (sem subtítulos) em formato Markdown (| coluna | coluna |).
+Nunca achate tabelas em texto corrido. Preserve listas, parágrafos e rodapés.
+Não invente informações.`
+
+// Extrai a última seção markdown do chunk (heading mais próximo do fim,
+// que rege o conteúdo subsequente). Usado pelo RAG para isolar fórmulas por
+// sub-equipamento e evitar que o LLM misture subtítulos.
+function extractSection(chunk: string): string | null {
+  const lines = chunk.split('\n')
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(/^#{1,6}\s+(.+?)\s*$/)
+    if (m) return m[1].trim()
+  }
+  const m = chunk.match(/^#{1,6}\s+(.+?)\s*$/m)
+  return m?.[1]?.trim() ?? null
+}
 
 async function setDocumentStatus(documentId: string, status: string) {
   await supabase
@@ -77,6 +114,7 @@ export function setupPdfWorker() {
               page_number: pageData.page,
               total_pages: pageData.total,
               chunk_index: ci,
+              section: extractSection(chunk),
             }
 
             if (isFirstChunk) {
