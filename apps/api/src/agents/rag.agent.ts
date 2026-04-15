@@ -14,14 +14,14 @@ interface RagResult {
   chatHistoryId?: string
 }
 
-// Portado idêntico da Edge Function (security/SKILL.md §4)
+// Filtro de prompt injection (security/SKILL.md §4) — sem truncar o conteúdo.
+// Truncagem estava cortando 1000 chars de cada chunk (chunks têm até 5000).
 function sanitizeForPrompt(text: string): string {
   return text
     .replace(/ignore\s+(all\s+)?(previous|prior|above)\s+instructions?/gi, '[REMOVIDO]')
     .replace(/você (agora |deve |é )?(ser|agir como|fingir)/gi, '[REMOVIDO]')
     .replace(/system\s*:/gi, '[REMOVIDO]')
     .replace(/\[INST\]|\[\/INST\]/g, '[REMOVIDO]')
-    .slice(0, 4000) // limite por chunk
 }
 
 type HistoryMessage = { role: 'user' | 'assistant'; content: string }
@@ -97,6 +97,20 @@ export async function answerQuestion(
       topContextBoost: ranked[0]?.contextual_boost,
     })
 
+    // Log diagnóstico: o que o LLM vai realmente ver.
+    for (let i = 0; i < Math.min(ranked.length, 10); i++) {
+      const c = ranked[i]
+      safeLog('info', `chunk[${i + 1}]`, {
+        source: c.metadata?.source,
+        page: c.metadata?.page_number ?? c.metadata?.page,
+        sim: c.similarity,
+        len: c.content.length,
+        preview: c.content.slice(0, 300),
+      })
+    }
+
+    // Contexto sem truncagem per-chunk. Limite total 60k chars — gpt-4.1-mini
+    // tem 128k tokens de janela, sobra espaço. O n8n envia os 10 chunks inteiros.
     const context = ranked
       .map((chunk, i) => {
         const source = (chunk.metadata?.source as string) ?? 'desconhecido'
@@ -106,7 +120,7 @@ export async function answerQuestion(
         return `${header}\n${sanitizeForPrompt(chunk.content)}`
       })
       .join('\n\n---\n\n')
-      .slice(0, 10000)
+      .slice(0, 60000)
 
     // 4. System prompt do agente TKzinho (lógica n8n + few-shot)
     const basePrompt = `# 1. IDENTIDADE E PERSONA
@@ -202,20 +216,10 @@ ${context}`
 
 *Nenhum documento relevante foi encontrado para esta pergunta. Responda com base no seu conhecimento geral sobre engenharia industrial, mas deixe claro que não há documentação interna disponível para embasar a resposta.*`
 
-    // 5. Memória curta — últimos 4 turnos deste usuário (replica o nó Memory do n8n)
-    const { data: historyRows } = await supabase
-      .from('chat_history')
-      .select('question, answer')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(4)
-
-    const historyMessages: HistoryMessage[] = (historyRows ?? [])
-      .reverse()
-      .flatMap((h) => [
-        { role: 'user' as const, content: h.question },
-        { role: 'assistant' as const, content: h.answer },
-      ])
+    // 5. Memória desativada: o n8n não injeta histórico no AI Agent (Memory input vazio).
+    // Injetar chat_history polui o contexto — respostas erradas anteriores reforçam o erro
+    // nas tentativas seguintes porque o LLM imita o turno mais recente como "verdade".
+    const historyMessages: HistoryMessage[] = []
 
     // 6. gpt-4.1-mini primeiro (modelo usado pelo n8n que já validou precisão)
     let result = await callLLM('gpt-4.1-mini', trimmed, systemPrompt, historyMessages)
