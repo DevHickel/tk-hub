@@ -5,7 +5,7 @@ import { QUEUES } from '../queues/index.js'
 import type { CertificateJobData } from '../queues/certificate.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { openai } from '../lib/openai.js'
-import { parseWithLlamaParse } from '../services/llamaparse.service.js'
+import { parseWithVision } from '../services/vision-parser.service.js'
 import { safeLog } from '../lib/logger.js'
 
 interface ExtractedCertData {
@@ -37,18 +37,8 @@ Instruções obrigatórias:
 - Se um campo não existir no certificado, use null
 - Retorne SOMENTE o JSON, sem qualquer outro texto`
 
-// Parsing instruction enviada ao LlamaParse. Dá contexto ao OCR do LlamaParse
-// sobre o tipo de documento e o formato de saída desejado, melhorando a qualidade
-// da extração em certificados escaneados e tabelas.
-const LLAMAPARSE_INSTRUCTION = `Este documento é um certificado de treinamento ou curso profissional brasileiro.
-Extraia TODO o texto visível preservando a estrutura.
-Destaque explicitamente: nome do participante/colaborador, nome do curso/treinamento, data de conclusão, data de validade/vencimento, carga horária em horas.
-Use tabelas em formato Markdown quando houver. Use cabeçalhos de nível 2 (##) para seções.
-Não invente informações — se um campo não aparecer no documento, não o inclua.`
-
-// Extrai dados a partir do texto parseado pelo LlamaParse usando GPT-4o text-only.
-// Este é o mesmo padrão do workflow n8n que estava funcionando:
-// LlamaParse (premium + parsing_instruction) → markdown → GPT-4o extrai JSON
+// Extrai dados do markdown transcrito pelo vision-parser usando GPT-4o text-only.
+// Pipeline: vision-parser (mupdf+gpt-4.1-mini vision) → markdown → GPT-4o extrai JSON.
 async function extractFromParsedText(fullText: string): Promise<ExtractedCertData> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',
@@ -124,19 +114,16 @@ export function setupCertificateWorker() {
         const buffer = Buffer.from(await fileRes.arrayBuffer())
         await job.updateProgress(20)
 
-        // 2. Parse with LlamaParse (premium mode + parsing instruction)
-        //    — same approach as the working n8n workflow. Handles both PDFs and images.
-        const pages = await parseWithLlamaParse(buffer, fileName, {
-          premiumMode: true,
-          parsingInstruction: LLAMAPARSE_INSTRUCTION,
-        })
+        // 2. Parse via vision pipeline (mupdf → gpt-4.1-mini vision).
+        //    Handles both PDFs and image files (PNG/JPG/WEBP/GIF).
+        const pages = await parseWithVision(buffer, fileName)
 
         if (pages.length === 0) {
-          throw new Error('LlamaParse não retornou nenhuma página com conteúdo')
+          throw new Error('Vision parser não retornou nenhuma página com conteúdo')
         }
 
         const fullText = pages.map(p => p.text).join('\n\n').slice(0, 8000)
-        safeLog('info', 'LlamaParse texto extraído', { certificateId, pages: pages.length, length: fullText.length })
+        safeLog('info', 'vision parser texto extraído', { certificateId, pages: pages.length, length: fullText.length })
         await job.updateProgress(60)
 
         // 3. Feed the parsed text to GPT-4o (text-only) to get structured JSON

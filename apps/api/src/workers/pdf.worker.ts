@@ -4,11 +4,9 @@ import { redis } from '../lib/redis.js'
 import { QUEUES } from '../queues/index.js'
 import { PdfJobData } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
-import { parseWithLlamaParse } from '../services/llamaparse.service.js'
+import { parseWithVision } from '../services/vision-parser.service.js'
 import { getOrCreateEmbedding, chunkMarkdown } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
-
-const LLAMAPARSE_INSTRUCTION = `Extract all tables as Markdown structures. Use level 2 headers (##) for Table Titles and Section Names. Do not summarize data.`
 
 async function setDocumentStatus(documentId: string, status: string) {
   await supabase
@@ -38,17 +36,14 @@ export function setupPdfWorker() {
         const buffer = Buffer.from(await fileData.arrayBuffer())
         await job.updateProgress(20)
 
-        // 3. Extrair texto com LlamaParse (premium + instruction — igual ao workflow n8n)
-        const pages = await parseWithLlamaParse(buffer, fileName, {
-          premiumMode: true,
-          parsingInstruction: LLAMAPARSE_INSTRUCTION,
-        })
+        // 3. Extrair texto via pipeline próprio: mupdf renderiza → gpt-4.1-mini visão transcreve
+        const pages = await parseWithVision(buffer, fileName)
         await job.updateProgress(40)
 
-        safeLog('info', 'LlamaParse retornou páginas', { documentId, pages: pages.length })
+        safeLog('info', 'vision parser retornou páginas', { documentId, pages: pages.length })
 
         if (pages.length === 0) {
-          throw new Error('LlamaParse não retornou nenhuma página com conteúdo')
+          throw new Error('Vision parser não retornou nenhuma página com conteúdo')
         }
 
         // 4. Para cada página: chunk → embedding → insert em documents
@@ -119,7 +114,7 @@ export function setupPdfWorker() {
     },
     {
       connection: redis,
-      concurrency: 3, // reduzido para não sobrecarregar LlamaParse
+      concurrency: 3,
     }
   )
 
