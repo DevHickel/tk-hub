@@ -11,6 +11,7 @@ export interface RagSource {
   file_name: string
   page: number
   image_url: string
+  label?: string // e.g., "Tabela 14 — Multímetro Digital"; absent means full-page source
 }
 
 interface RagResult {
@@ -252,22 +253,37 @@ ${context}`
       }
     }
 
-    // 8. Montar `sources[]` — dedup top-3 por (file_name, page) a partir dos ranked,
-    // com URL pública do PNG daquela página no bucket `document-pages`.
+    // 8. Montar `sources[]` — prefere crops de tabela (mais úteis no chat) e cai pra
+    // página inteira quando a página não teve tabela detectada. Dedup top-3.
     const sources: RagSource[] = []
     const seenSources = new Set<string>()
+    const pushSource = (file_name: string, page: number, image_path: string, label?: string) => {
+      const key = `${file_name}::${page}::${label ?? 'page'}`
+      if (seenSources.has(key)) return
+      seenSources.add(key)
+      const { data: pub } = supabase.storage.from('document-pages').getPublicUrl(image_path)
+      sources.push({ file_name, page, image_url: pub.publicUrl, label })
+    }
+
     for (const chunk of ranked) {
+      if (sources.length >= 3) break
       const fileName = (chunk.metadata?.source as string | undefined) ?? null
       const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
       const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
+      if (!fileName || !Number.isFinite(page)) continue
+
+      const tables = (chunk.metadata?.page_tables as Array<{ label: string; image_path: string }> | undefined) ?? []
+      if (tables.length > 0) {
+        for (const t of tables) {
+          if (sources.length >= 3) break
+          if (!t?.image_path) continue
+          pushSource(fileName, page, t.image_path, t.label)
+        }
+        continue
+      }
+
       const imagePath = chunk.metadata?.page_image_path as string | undefined
-      if (!fileName || !Number.isFinite(page) || !imagePath) continue
-      const key = `${fileName}::${page}`
-      if (seenSources.has(key)) continue
-      seenSources.add(key)
-      const { data: pub } = supabase.storage.from('document-pages').getPublicUrl(imagePath)
-      sources.push({ file_name: fileName, page, image_url: pub.publicUrl })
-      if (sources.length >= 3) break
+      if (imagePath) pushSource(fileName, page, imagePath)
     }
 
     // 9. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro

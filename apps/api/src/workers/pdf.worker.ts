@@ -69,6 +69,7 @@ export function setupPdfWorker() {
               total_pages: pageData.total,
               chunk_index: ci,
               page_image_path: pageData.image_path,
+              page_tables: pageData.tables ?? [],
             }
 
             if (isFirstChunk) {

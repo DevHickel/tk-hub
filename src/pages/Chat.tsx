@@ -40,6 +40,7 @@ interface MessageSource {
   file_name: string;
   page: number;
   image_url: string;
+  label?: string;
 }
 
 interface Message {
@@ -113,7 +114,7 @@ export default function Chat() {
     if (data) setMessages(data.map(m => ({
       ...m,
       role: m.role as 'user' | 'assistant',
-      sources: (m.sources as MessageSource[] | null) ?? null,
+      sources: (m.sources as unknown as MessageSource[] | null) ?? null,
     })));
   };
 
@@ -169,7 +170,7 @@ export default function Chat() {
       .insert({ conversation_id: conversationId, content, role: 'user' })
       .select()
       .single();
-    if (userMsg) setMessages(prev => [...prev, { ...userMsg, role: 'user' as const }]);
+    if (userMsg) setMessages(prev => [...prev, { ...userMsg, role: 'user' as const, sources: null } as Message]);
 
     await logActivity(user.id, 'message_sent', { conversation_id: conversationId });
 
@@ -202,22 +203,22 @@ export default function Chat() {
           content: aiResponse,
           role: 'assistant',
           chat_history_id: chatHistoryId,
-          sources: sources.length > 0 ? sources : null,
+          sources: (sources.length > 0 ? sources : null) as never,
         })
         .select()
         .single();
       if (aiMsg) setMessages(prev => [...prev, {
         ...aiMsg,
         role: 'assistant' as const,
-        sources: (aiMsg.sources as MessageSource[] | null) ?? null,
-      }]);
+        sources: (aiMsg.sources as unknown as MessageSource[] | null) ?? null,
+      } as Message]);
     } catch {
       const { data: errMsg } = await supabase
         .from('messages')
         .insert({ conversation_id: conversationId, content: 'Erro ao processar sua mensagem. Tente novamente.', role: 'assistant' })
         .select()
         .single();
-      if (errMsg) setMessages(prev => [...prev, { ...errMsg, role: 'assistant' as const }]);
+      if (errMsg) setMessages(prev => [...prev, { ...errMsg, role: 'assistant' as const, sources: null } as Message]);
     }
 
     await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId);
@@ -361,7 +362,7 @@ export default function Chat() {
                 </p>
               </div>
             ) : (
-              messages.map((message, index) => {
+              messages.map((message) => {
                 const isUser = message.role === 'user';
                 return (
                   <div key={message.id} className={cn('flex gap-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
@@ -392,18 +393,21 @@ export default function Chat() {
                         {!isUser && message.sources && message.sources.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-border/40">
                             <p className="text-xs text-muted-foreground mb-2">📎 Fonte visual — clique para ampliar</p>
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-wrap gap-3">
                               {message.sources.map((s, i) => (
-                                <div key={i} className="flex flex-col items-center gap-1">
+                                <div key={i} className="flex flex-col items-start gap-1 max-w-[220px]">
                                   <Zoom>
                                     <img
                                       src={s.image_url}
-                                      alt={`${s.file_name} — página ${s.page}`}
-                                      className="h-28 w-auto rounded border border-border object-contain bg-white"
+                                      alt={s.label ?? `${s.file_name} — página ${s.page}`}
+                                      className="max-h-40 w-auto rounded border border-border object-contain bg-white"
                                     />
                                   </Zoom>
-                                  <span className="text-[10px] text-muted-foreground max-w-[160px] truncate" title={`${s.file_name} — Pág. ${s.page}`}>
-                                    Pág. {s.page}
+                                  <span
+                                    className="text-[10px] text-muted-foreground leading-tight"
+                                    title={`${s.file_name} — Pág. ${s.page}`}
+                                  >
+                                    {s.label ? `${s.label} · Pág. ${s.page}` : `Pág. ${s.page}`}
                                   </span>
                                 </div>
                               ))}
