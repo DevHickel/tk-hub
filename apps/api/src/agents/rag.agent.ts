@@ -7,11 +7,18 @@ import { openai } from '../lib/openai.js'
 import { getOrCreateEmbedding } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
 
+export interface RagSource {
+  file_name: string
+  page: number
+  image_url: string
+}
+
 interface RagResult {
   answer: string
   model: string
   tokensUsed: number
   chatHistoryId?: string
+  sources: RagSource[]
 }
 
 // Filtro de prompt injection (security/SKILL.md §4) — sem truncar o conteúdo.
@@ -240,7 +247,25 @@ ${context}`
       }
     }
 
-    // 8. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro
+    // 8. Montar `sources[]` — dedup top-3 por (file_name, page) a partir dos ranked,
+    // com URL pública do PNG daquela página no bucket `document-pages`.
+    const sources: RagSource[] = []
+    const seenSources = new Set<string>()
+    for (const chunk of ranked) {
+      const fileName = (chunk.metadata?.source as string | undefined) ?? null
+      const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
+      const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
+      const imagePath = chunk.metadata?.page_image_path as string | undefined
+      if (!fileName || !Number.isFinite(page) || !imagePath) continue
+      const key = `${fileName}::${page}`
+      if (seenSources.has(key)) continue
+      seenSources.add(key)
+      const { data: pub } = supabase.storage.from('document-pages').getPublicUrl(imagePath)
+      sources.push({ file_name: fileName, page, image_url: pub.publicUrl })
+      if (sources.length >= 3) break
+    }
+
+    // 9. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro
     // (não os 10 brutos). Isso mantém o loop de feedback preciso.
     const usedChunkIds = ranked.map((c) => c.id).filter((id): id is number => typeof id === 'number')
 
@@ -266,6 +291,7 @@ ${context}`
       model: modelUsed,
       tokensUsed: result.tokensUsed,
       chatHistoryId: histRow?.id as string | undefined,
+      sources,
     }
   } catch (error) {
     Sentry.captureException(error, { tags: { agent: 'rag', userId } })

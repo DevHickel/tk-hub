@@ -30,9 +30,17 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Zoom from 'react-medium-image-zoom';
+import 'react-medium-image-zoom/dist/styles.css';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+interface MessageSource {
+  file_name: string;
+  page: number;
+  image_url: string;
+}
 
 interface Message {
   id: string;
@@ -42,6 +50,7 @@ interface Message {
   created_at: string;
   feedback?: 'like' | 'dislike' | null;
   chat_history_id?: string | null;
+  sources?: MessageSource[] | null;
 }
 
 interface Conversation {
@@ -101,7 +110,11 @@ export default function Chat() {
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
-    if (data) setMessages(data.map(m => ({ ...m, role: m.role as 'user' | 'assistant' })));
+    if (data) setMessages(data.map(m => ({
+      ...m,
+      role: m.role as 'user' | 'assistant',
+      sources: (m.sources as MessageSource[] | null) ?? null,
+    })));
   };
 
   const handleNewConversation = () => {
@@ -174,10 +187,12 @@ export default function Chat() {
 
       let aiResponse = 'Desculpe, não consegui processar sua mensagem.';
       let chatHistoryId: string | null = null;
+      let sources: MessageSource[] = [];
       if (response.ok) {
         const data = await response.json();
         aiResponse = data.response || aiResponse;
         chatHistoryId = data.chat_history_id ?? null;
+        sources = Array.isArray(data.sources) ? data.sources : [];
       }
 
       const { data: aiMsg } = await supabase
@@ -187,10 +202,15 @@ export default function Chat() {
           content: aiResponse,
           role: 'assistant',
           chat_history_id: chatHistoryId,
+          sources: sources.length > 0 ? sources : null,
         })
         .select()
         .single();
-      if (aiMsg) setMessages(prev => [...prev, { ...aiMsg, role: 'assistant' as const }]);
+      if (aiMsg) setMessages(prev => [...prev, {
+        ...aiMsg,
+        role: 'assistant' as const,
+        sources: (aiMsg.sources as MessageSource[] | null) ?? null,
+      }]);
     } catch {
       const { data: errMsg } = await supabase
         .from('messages')
@@ -367,6 +387,27 @@ export default function Chat() {
                         ) : (
                           <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-table:my-2 prose-hr:my-2 prose-strong:text-foreground prose-code:text-foreground">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          </div>
+                        )}
+                        {!isUser && message.sources && message.sources.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-border/40">
+                            <p className="text-xs text-muted-foreground mb-2">📎 Fonte visual — clique para ampliar</p>
+                            <div className="flex flex-wrap gap-2">
+                              {message.sources.map((s, i) => (
+                                <div key={i} className="flex flex-col items-center gap-1">
+                                  <Zoom>
+                                    <img
+                                      src={s.image_url}
+                                      alt={`${s.file_name} — página ${s.page}`}
+                                      className="h-28 w-auto rounded border border-border object-contain bg-white"
+                                    />
+                                  </Zoom>
+                                  <span className="text-[10px] text-muted-foreground max-w-[160px] truncate" title={`${s.file_name} — Pág. ${s.page}`}>
+                                    Pág. {s.page}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

@@ -5,12 +5,20 @@
 
 import * as mupdf from 'mupdf'
 import { openai } from '../lib/openai.js'
+import { supabase } from '../lib/supabase.js'
 import { safeLog } from '../lib/logger.js'
 
 export interface VisionPage {
   text: string
   page: number
   total: number
+  image_path?: string // path within the `document-pages` bucket, when uploaded
+}
+
+export interface ParseWithVisionOptions {
+  // When provided, each rendered page is uploaded to `document-pages/{documentId}/page-{N}.png`
+  // so the frontend can show a visual thumbnail of the source page next to RAG answers.
+  documentId?: string
 }
 
 const RENDER_SCALE = 2 // ~144 DPI, suficiente para OCR visual de tabelas
@@ -99,8 +107,25 @@ async function transcribePage(
   return text
 }
 
-export async function parseWithVision(fileBuffer: Buffer, fileName: string): Promise<VisionPage[]> {
+async function uploadPageImage(documentId: string, pageNumber: number, png: Uint8Array): Promise<string | undefined> {
+  const path = `${documentId}/page-${pageNumber}.png`
+  const { error } = await supabase.storage
+    .from('document-pages')
+    .upload(path, Buffer.from(png), { contentType: 'image/png', upsert: true })
+  if (error) {
+    safeLog('warn', 'page image upload failed', { documentId, pageNumber, error: error.message })
+    return undefined
+  }
+  return path
+}
+
+export async function parseWithVision(
+  fileBuffer: Buffer,
+  fileName: string,
+  options: ParseWithVisionOptions = {}
+): Promise<VisionPage[]> {
   const startedAt = Date.now()
+  const { documentId } = options
 
   // Se for imagem direta (certificado escaneado como PNG/JPG), pula mupdf.
   if (isImageFile(fileName)) {
@@ -132,16 +157,18 @@ export async function parseWithVision(fileBuffer: Buffer, fileName: string): Pro
     const transcriptions = await Promise.all(
       batch.map(async (png, j) => {
         const pageNum = i + j + 1
-        try {
-          const text = await transcribePage(png, pageNum)
-          return { text, page: pageNum, total }
-        } catch (error) {
-          safeLog('warn', 'vision parse falhou — página ignorada', {
-            page: pageNum,
-            error: (error as Error).message,
-          })
-          return { text: '', page: pageNum, total }
-        }
+        // Transcreve e faz upload em paralelo — um não bloqueia o outro.
+        const [textResult, imagePath] = await Promise.all([
+          transcribePage(png, pageNum).catch((error: Error) => {
+            safeLog('warn', 'vision parse falhou — página ignorada', {
+              page: pageNum,
+              error: error.message,
+            })
+            return ''
+          }),
+          documentId ? uploadPageImage(documentId, pageNum, png) : Promise.resolve(undefined),
+        ])
+        return { text: textResult, page: pageNum, total, image_path: imagePath }
       })
     )
     for (let j = 0; j < transcriptions.length; j++) {

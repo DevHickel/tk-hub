@@ -36,8 +36,10 @@ export function setupPdfWorker() {
         const buffer = Buffer.from(await fileData.arrayBuffer())
         await job.updateProgress(20)
 
-        // 3. Extrair texto via pipeline próprio: mupdf renderiza → gpt-4.1-mini visão transcreve
-        const pages = await parseWithVision(buffer, fileName)
+        // 3. Extrair texto via pipeline próprio: mupdf renderiza → gpt-4.1-mini visão transcreve.
+        //    Passa documentId para que cada página seja também salva como PNG no bucket
+        //    `document-pages`, habilitando a exibição de miniatura da fonte visual no chat.
+        const pages = await parseWithVision(buffer, fileName, { documentId })
         await job.updateProgress(40)
 
         safeLog('info', 'vision parser retornou páginas', { documentId, pages: pages.length })
@@ -66,6 +68,7 @@ export function setupPdfWorker() {
               page_number: pageData.page,
               total_pages: pageData.total,
               chunk_index: ci,
+              page_image_path: pageData.image_path,
             }
 
             if (isFirstChunk) {

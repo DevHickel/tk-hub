@@ -303,6 +303,8 @@ export type Database = {
           id: string
           is_pinned: boolean | null
           role: string
+          chat_history_id: string | null
+          sources: Json | null
         }
         Insert: {
           content: string
@@ -311,6 +313,8 @@ export type Database = {
           id?: string
           is_pinned?: boolean | null
           role: string
+          chat_history_id?: string | null
+          sources?: Json | null
         }
         Update: {
           content?: string
@@ -319,6 +323,8 @@ export type Database = {
           id?: string
           is_pinned?: boolean | null
           role?: string
+          chat_history_id?: string | null
+          sources?: Json | null
         }
         Relationships: [
           {

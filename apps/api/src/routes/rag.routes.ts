@@ -41,8 +41,8 @@ ragRoutes.post(
     const userId = c.get('userId')
 
     try {
-      const { answer, chatHistoryId } = await answerQuestion(message, userId, conversation_id)
-      return c.json({ response: answer, chat_history_id: chatHistoryId })
+      const { answer, chatHistoryId, sources } = await answerQuestion(message, userId, conversation_id)
+      return c.json({ response: answer, chat_history_id: chatHistoryId, sources })
     } catch (error) {
       Sentry.captureException(error, { tags: { route: '/api/chat', userId } })
       safeLog('error', 'Erro no /api/chat', { error: (error as Error).message })
