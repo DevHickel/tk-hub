@@ -8,7 +8,7 @@ import { parseWithLlamaParse } from '../services/llamaparse.service.js'
 import { getOrCreateEmbedding, chunkMarkdown } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
 
-const LLAMAPARSE_INSTRUCTION = `Extraia TODO o texto visível em formato markdown, preservando tabelas como | col | col |, listas, parágrafos e cabeçalhos. Não invente informações.`
+const LLAMAPARSE_INSTRUCTION = `Extract all tables as Markdown structures. Use level 2 headers (##) for Table Titles and Section Names. Do not summarize data.`
 
 async function setDocumentStatus(documentId: string, status: string) {
   await supabase

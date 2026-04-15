@@ -217,22 +217,22 @@ ${context}`
         { role: 'assistant' as const, content: h.answer },
       ])
 
-    // 6. gpt-4o-mini primeiro (filosofia de custo — context.md)
-    let result = await callLLM('gpt-4o-mini', trimmed, systemPrompt, historyMessages)
-    let modelUsed = 'gpt-4o-mini'
+    // 6. gpt-4.1-mini primeiro (modelo usado pelo n8n que já validou precisão)
+    let result = await callLLM('gpt-4.1-mini', trimmed, systemPrompt, historyMessages)
+    let modelUsed = 'gpt-4.1-mini'
 
-    // 7. Fallback para gpt-4o se resposta vaga (portado da Edge Function)
+    // 7. Fallback para gpt-4.1 se resposta vaga
     const isVague =
       result.answer.includes('Não encontrei') ||
       result.answer.includes('não encontrei') ||
       result.answer.length < 50
 
     if (isVague && context) {
-      safeLog('info', 'Fallback para gpt-4o', { userId })
-      const fallback = await callLLM('gpt-4o', trimmed, systemPrompt, historyMessages)
+      safeLog('info', 'Fallback para gpt-4.1', { userId })
+      const fallback = await callLLM('gpt-4.1', trimmed, systemPrompt, historyMessages)
       if (fallback.answer.length > result.answer.length) {
         result = fallback
-        modelUsed = 'gpt-4o'
+        modelUsed = 'gpt-4.1'
       }
     }
 
