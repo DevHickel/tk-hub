@@ -199,6 +199,71 @@ ragRoutes.post('/upload', aiRateLimiter, async (c) => {
   }
 })
 
+// ── DELETE /api/rag-documents ─────────────────────────────────────────────────
+// Exclui um documento RAG: limpa chunks do DB, PDFs do Storage e imagens do bucket document-pages.
+// body: { ids: number[], source_name: string }
+const deleteRagSchema = z.object({
+  ids: z.array(z.number().int()).min(1),
+  source_name: z.string().min(1),
+})
+
+ragRoutes.delete(
+  '/rag-documents',
+  zValidator('json', deleteRagSchema),
+  async (c) => {
+    const userId = c.get('userId')
+    const userRole = c.get('userRole')
+
+    if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+      return c.json({ error: 'Insufficient permissions' }, 403)
+    }
+
+    const { ids, source_name } = c.req.valid('json')
+
+    try {
+      // 1. Buscar file_path do PDF original (todos os chunks têm o mesmo file_path)
+      const { data: doc } = await supabase
+        .from('documents')
+        .select('file_path')
+        .eq('id', ids[0])
+        .single()
+
+      // 2. Limpar imagens no bucket document-pages (pasta por documentId)
+      for (const docId of ids) {
+        const { data: files } = await supabase.storage
+          .from('document-pages')
+          .list(String(docId))
+        if (files && files.length > 0) {
+          const paths = files.map((f) => `${docId}/${f.name}`)
+          await supabase.storage.from('document-pages').remove(paths)
+          safeLog('info', 'document-pages cleanup', { docId, removed: paths.length })
+        }
+      }
+
+      // 3. Remover PDF original do bucket documents
+      if (doc?.file_path) {
+        await supabase.storage.from('documents').remove([doc.file_path])
+        safeLog('info', 'PDF removido do storage', { filePath: doc.file_path })
+      }
+
+      // 4. Deletar chunks do banco
+      const { error: deleteError } = await supabase
+        .from('documents')
+        .delete()
+        .in('id', ids)
+
+      if (deleteError) throw deleteError
+
+      safeLog('info', 'RAG document excluído', { userId, source_name, chunks: ids.length })
+      return c.json({ success: true })
+    } catch (error) {
+      Sentry.captureException(error, { tags: { route: 'DELETE /api/rag-documents', userId } })
+      safeLog('error', 'Erro ao excluir RAG document', { error: (error as Error).message })
+      return c.json({ error: 'Internal server error' }, 500)
+    }
+  }
+)
+
 // ── GET /api/jobs/:jobId/status ────────────────────────────────────────────────
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

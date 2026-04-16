@@ -1027,8 +1027,20 @@ function RagTab() {
     if (!confirm(`Excluir "${doc.source_name}" e todos os seus ${doc.chunk_count} chunks? Esta ação não pode ser desfeita.`)) return;
     setDeletingSource(doc.source_name);
     try {
-      const { error } = await supabase.from('documents').delete().in('id', doc.ids);
-      if (error) throw error;
+      const apiUrl = import.meta.env.VITE_API_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${apiUrl}/api/rag-documents`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ ids: doc.ids, source_name: doc.source_name }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
       toast.success('Documento excluído com sucesso.');
       if (user) await logActivity(user.id, 'rag_document_deleted', { file_name: doc.source_name });
       await fetchDocs();
