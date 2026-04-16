@@ -201,12 +201,13 @@ async function cropAndUploadTables(
   for (let i = 0; i < tables.length; i++) {
     const t = tables[i]
     const [nx, ny, nw, nh] = t.bbox
-    // Clamp to [0, 1] and enforce minimum crop size (ignore tiny spurious detections).
-    const x = Math.max(0, Math.min(1, nx))
-    const y = Math.max(0, Math.min(1, ny))
-    const w = Math.max(0, Math.min(1 - x, nw))
-    const h = Math.max(0, Math.min(1 - y, nh))
-    if (w < 0.05 || h < 0.02) continue // too small — likely a false positive
+    // Add 5% padding on each side to compensate for tight LLM bboxes.
+    const PAD = 0.05
+    const x = Math.max(0, nx - PAD)
+    const y = Math.max(0, ny - PAD)
+    const w = Math.min(1 - x, nw + PAD * 2)
+    const h = Math.min(1 - y, nh + PAD * 2)
+    if (w < 0.05 || h < 0.02) continue
 
     const left = Math.round(x * width)
     const top = Math.round(y * height)
