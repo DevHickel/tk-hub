@@ -34,6 +34,27 @@ function sanitizeForPrompt(text: string): string {
 
 type HistoryMessage = { role: 'user' | 'assistant'; content: string }
 
+// Extrai a linha `TABLES_USED: <label1>;;<label2>` (ou `TABLES_USED: NONE`) do final
+// da resposta do LLM e a remove do texto exibido. Retorna:
+//   - `labels: null`  → LLM esqueceu o marcador → fallback ao comportamento antigo
+//   - `labels: []`    → LLM declarou NONE → sem tabelas específicas
+//   - `labels: [...]` → lista a filtrar em `sources[]`
+const TABLES_USED_RE = /^[ \t]*TABLES_USED:[ \t]*(.*?)[ \t]*$/m
+function extractUsedTableLabels(answer: string): { answer: string; labels: string[] | null } {
+  const m = answer.match(TABLES_USED_RE)
+  if (!m) return { answer, labels: null }
+  const cleaned = answer.replace(TABLES_USED_RE, '').replace(/\n{3,}$/g, '\n\n').trimEnd()
+  const raw = m[1].trim()
+  if (raw.length === 0 || raw.toUpperCase() === 'NONE') {
+    return { answer: cleaned, labels: [] }
+  }
+  const labels = raw
+    .split(';;')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  return { answer: cleaned, labels }
+}
+
 // Portado idêntico da Edge Function — lógica mini → 4o preservada
 async function callLLM(
   model: string,
@@ -75,7 +96,7 @@ export async function answerQuestion(
       'match_documents_with_feedback' as never,
       {
         query_embedding: JSON.stringify(questionEmbedding),
-        match_count: 10,
+        match_count: 15,
       } as never
     )
 
@@ -124,7 +145,14 @@ export async function answerQuestion(
         const source = (chunk.metadata?.source as string) ?? 'desconhecido'
         const page = (chunk.metadata?.page_number ?? chunk.metadata?.page ?? '') as string | number
         const sim = (chunk.similarity ?? 0).toFixed(2)
-        const header = `[Chunk #${i + 1} | relevância ${sim} | Fonte: ${source}${page ? ` | Pág. ${page}` : ''}]`
+        const tables = (chunk.metadata?.page_tables as Array<{ label?: string }> | undefined) ?? []
+        const tableLabels = tables
+          .map((t) => (typeof t?.label === 'string' ? t.label.trim() : ''))
+          .filter((l) => l.length > 0)
+        const tablesLine = tableLabels.length > 0
+          ? `\nTabelas disponíveis nesta página: ${tableLabels.join('; ')}`
+          : ''
+        const header = `[Chunk #${i + 1} | relevância ${sim} | Fonte: ${source}${page ? ` | Pág. ${page}` : ''}]${tablesLine}`
         return `${header}\n${sanitizeForPrompt(chunk.content)}`
       })
       .join('\n\n---\n\n')
@@ -203,6 +231,18 @@ REGRAS CRÍTICAS DA CITAÇÃO:
 4. Se a resposta usou dois chunks do mesmo arquivo em páginas distintas (ex: #1 Pág. 5 e #2 Pág. 6), liste ambas: *Pág. 5, 6*.
 5. Se usou chunks de arquivos diferentes, liste cada fonte numa linha separada após o 📍.
 
+# 8. TAG DE TABELAS USADAS (OBRIGATÓRIO NO FINAL)
+Depois da citação 📍 Fonte, numa NOVA linha, escreva EXATAMENTE:
+
+\`TABLES_USED: <label1>;;<label2>\`
+
+Onde cada \`<labelN>\` é copiado **LITERALMENTE** do campo "Tabelas disponíveis nesta página" de algum chunk do CONTEXTO, correspondendo às tabelas cujo conteúdo você de fato usou para responder.
+
+- Se usou dados da **Tabela 14 — Multímetro Digital** e da **Tabela 13 — Multímetro Digital**, escreva: \`TABLES_USED: Tabela 13 — Multímetro Digital;;Tabela 14 — Multímetro Digital\`.
+- Se a resposta foi texto corrido (fórmulas, parágrafos, procedimento) sem puxar especificações tabulares, escreva: \`TABLES_USED: NONE\`.
+- **NUNCA** invente labels que não estão em nenhum cabeçalho "Tabelas disponíveis". Se não tem certeza se usou uma tabela específica, prefira \`NONE\`.
+- Essa linha é um **marcador interno** para o sistema — não explique, não formate, não comente sobre ela.
+
 # EXEMPLO DE SAÍDA ESPERADA (Few-Shot)
 *Usuário:* "Critério do esquadro"
 *Contexto (Tabela):* \`| 16 | Esquadro | Esquadro Combinado... \\varepsilon = 10 + L/60... |\`
@@ -218,7 +258,8 @@ O erro máximo permitido é dado pela fórmula:
 Para Esquadros de Precisão, a ortogonalidade é: **t = 20 + Li/10 (µm)**.
 
 ---
-📍 **Fonte:** Documento *FD-TKS-QUA-001_R.0.pdf* | Pág. *5*"`
+📍 **Fonte:** Documento *FD-TKS-QUA-001_R.0.pdf* | Pág. *5*
+TABLES_USED: NONE"`
 
     const systemPrompt = context
       ? `${basePrompt}
@@ -253,8 +294,20 @@ ${context}`
       }
     }
 
-    // 8. Montar `sources[]` — prefere crops de tabela (mais úteis no chat) e cai pra
-    // página inteira quando a página não teve tabela detectada. Dedup top-3.
+    // 8. Extrair marcador `TABLES_USED:` do final da resposta. Isso permite o LLM
+    // declarar quais tabelas ele de fato consultou — evita mostrar crops irrelevantes
+    // que só ranquearam por conterem o nome do equipamento como coluna.
+    const extracted = extractUsedTableLabels(result.answer)
+    result.answer = extracted.answer
+    const usedLabels = new Set((extracted.labels ?? []).map((l) => l.toLowerCase()))
+    safeLog('info', 'TABLES_USED parsed', {
+      declared: extracted.labels,
+      count: extracted.labels?.length ?? null,
+    })
+
+    // 9. Montar `sources[]`. Modo guiado: se o LLM citou labels, só devolve esses crops.
+    // Fallback: se não citou nada (labels null) ou citou labels que não batem com nenhum
+    // chunk, cai pra lógica antiga — crops da página top + página inteira como last resort.
     const sources: RagSource[] = []
     const seenSources = new Set<string>()
     const pushSource = (file_name: string, page: number, image_path: string, label?: string) => {
@@ -265,25 +318,48 @@ ${context}`
       sources.push({ file_name, page, image_url: pub.publicUrl, label })
     }
 
-    for (const chunk of ranked) {
-      if (sources.length >= 3) break
-      const fileName = (chunk.metadata?.source as string | undefined) ?? null
-      const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
-      const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
-      if (!fileName || !Number.isFinite(page)) continue
-
-      const tables = (chunk.metadata?.page_tables as Array<{ label: string; image_path: string }> | undefined) ?? []
-      if (tables.length > 0) {
+    if (usedLabels.size > 0) {
+      // Modo guiado pelo LLM: varre todos os chunks (não só top-3) procurando crops
+      // cujo label foi citado. Isso permite pegar Tabela 13 mesmo se o chunk dela não
+      // for top-1 em similaridade — basta estar em algum chunk do match_count=15.
+      for (const chunk of ranked) {
+        const fileName = (chunk.metadata?.source as string | undefined) ?? null
+        const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
+        const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
+        if (!fileName || !Number.isFinite(page)) continue
+        const tables = (chunk.metadata?.page_tables as Array<{ label: string; image_path: string }> | undefined) ?? []
         for (const t of tables) {
-          if (sources.length >= 3) break
-          if (!t?.image_path) continue
+          if (!t?.label || !t?.image_path) continue
+          if (!usedLabels.has(t.label.toLowerCase())) continue
           pushSource(fileName, page, t.image_path, t.label)
+          if (sources.length >= 5) break
         }
-        continue
+        if (sources.length >= 5) break
       }
+    }
 
-      const imagePath = chunk.metadata?.page_image_path as string | undefined
-      if (imagePath) pushSource(fileName, page, imagePath)
+    // Fallback: LLM não declarou OU nenhum crop bateu com os labels citados.
+    if (sources.length === 0) {
+      for (const chunk of ranked) {
+        if (sources.length >= 3) break
+        const fileName = (chunk.metadata?.source as string | undefined) ?? null
+        const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
+        const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
+        if (!fileName || !Number.isFinite(page)) continue
+
+        const tables = (chunk.metadata?.page_tables as Array<{ label: string; image_path: string }> | undefined) ?? []
+        if (tables.length > 0) {
+          for (const t of tables) {
+            if (sources.length >= 3) break
+            if (!t?.image_path) continue
+            pushSource(fileName, page, t.image_path, t.label)
+          }
+          continue
+        }
+
+        const imagePath = chunk.metadata?.page_image_path as string | undefined
+        if (imagePath) pushSource(fileName, page, imagePath)
+      }
     }
 
     // 9. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro

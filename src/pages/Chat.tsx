@@ -30,8 +30,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import Zoom from 'react-medium-image-zoom';
-import 'react-medium-image-zoom/dist/styles.css';
+import { SourceLightbox } from '@/components/chat/SourceLightbox';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -72,6 +71,7 @@ export default function Chat() {
   const [input, setInput] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [lightbox, setLightbox] = useState<{ msgId: string; idx: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -396,13 +396,24 @@ export default function Chat() {
                             <div className="flex flex-wrap gap-3">
                               {message.sources.map((s, i) => (
                                 <div key={i} className="flex flex-col items-start gap-1 max-w-[220px]">
-                                  <Zoom>
+                                  <button
+                                    type="button"
+                                    className="cursor-zoom-in rounded border border-border overflow-hidden bg-white hover:ring-2 hover:ring-primary/40 transition-shadow"
+                                    onClick={() => setLightbox({ msgId: message.id, idx: i })}
+                                  >
                                     <img
                                       src={s.image_url}
                                       alt={s.label ?? `${s.file_name} — página ${s.page}`}
-                                      className="max-h-40 w-auto rounded border border-border object-contain bg-white"
+                                      className="max-h-40 w-auto object-contain"
                                     />
-                                  </Zoom>
+                                  </button>
+                                  <SourceLightbox
+                                    open={lightbox?.msgId === message.id && lightbox?.idx === i}
+                                    onOpenChange={(open) => { if (!open) setLightbox(null); }}
+                                    src={s.image_url}
+                                    label={s.label}
+                                    caption={`${s.file_name} · Pág. ${s.page}`}
+                                  />
                                   <span
                                     className="text-[10px] text-muted-foreground leading-tight"
                                     title={`${s.file_name} — Pág. ${s.page}`}
