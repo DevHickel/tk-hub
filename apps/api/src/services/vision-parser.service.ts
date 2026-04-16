@@ -69,19 +69,49 @@ REGRAS:
 
 Responda APENAS com o markdown transcrito. Sem preâmbulo, sem \`\`\`markdown, sem fechamento.`
 
-const TABLE_DETECTOR_PROMPT = `Você é um detector de tabelas em páginas de PDF. Vou te mostrar uma página em imagem. Sua tarefa é localizar CADA tabela visível e retornar um JSON com suas coordenadas normalizadas (0 a 1) e o título/legenda.
+const TABLE_DETECTOR_PROMPT = `Você é um detector de tabelas em páginas de documentos técnicos (PDFs de calibração, procedimentos industriais). Vou te mostrar uma página em imagem. Retorne um JSON com as coordenadas normalizadas (0 a 1) e o título de CADA tabela.
 
-REGRAS:
-1. Considere "tabela" qualquer bloco com colunas e linhas separadas por bordas ou alinhamento consistente — incluindo tabelas com legendas tipo "Tabela 14 — Multímetro Digital". Também considere blocos de texto estruturado com título "Tabela N" mesmo sem bordas visíveis (ex: listas de fatores, modos de calibração).
-2. Para cada tabela, extraia:
-   - **label**: o título da tabela EXATAMENTE como aparece no documento (ex: "Tabela 14 — Multímetro Digital"). Se não houver título, invente um curto e descritivo (ex: "Especificações do Torquímetro").
-   - **bbox**: [x, y, w, h] em coordenadas normalizadas (0-1) onde (0,0) é o canto superior-esquerdo da página.
-     **CRÍTICO**: O bbox DEVE começar no TÍTULO da tabela (ex: "Tabela 13 — Multímetro Digital"), NÃO no corpo. O topo do bbox (y) é a borda superior do texto do título. O fundo do bbox (y+h) é a última linha de conteúdo da tabela ou nota de rodapé vinculada. Deixe margem de ~5% acima do título e abaixo da última linha.
-3. NÃO inclua parágrafos de texto corrido, cabeçalhos de seção, diagramas, figuras ou assinaturas.
-4. Se a página não tiver nenhuma tabela, retorne \`{"tables": []}\`.
-5. Se houver tabelas sobrepostas ou a mesma tabela quebrada em duas partes visíveis, trate cada bloco visual como uma tabela separada.
+# O QUE É UMA TABELA
+Considere "tabela" QUALQUER destes formatos:
+- Bloco com colunas e linhas separadas por bordas ou grade visível.
+- Bloco de texto estruturado sob um título "Tabela N — Nome" mesmo SEM bordas (ex: lista de fatores de calibração, modos de ajuste, especificações em bullets indentados).
+- Quadro com cabeçalho e dados alinhados em colunas por espaçamento.
 
-Responda APENAS com JSON válido no formato exato:
+# REGRAS DE DELIMITAÇÃO DO BBOX (CRÍTICO)
+Para cada tabela detectada, retorne:
+- **label**: título EXATAMENTE como aparece (ex: "Tabela 14 — Multímetro Digital"). Se não houver título visível, crie um curto e descritivo.
+- **bbox**: [x, y, w, h] normalizado (0-1), onde (0,0) é o canto superior-esquerdo da página.
+
+## Borda SUPERIOR (y):
+O topo do bbox é **acima do título** da tabela (ex: "Tabela 13 — Multímetro Digital").
+Se o título está na coordenada Y=0.15, o bbox.y deve ser ~0.12 (margem de ~3% acima do título).
+NUNCA comece no corpo — o título FAZ PARTE da tabela e deve estar dentro do bbox.
+
+## Borda INFERIOR (y + h):
+O fundo do bbox é **a última linha de conteúdo que pertence a esta tabela**. Isso inclui:
+- Notas de rodapé vinculadas ("Nota:", "Obs:", "Onde L = ...").
+- Última linha de dados ou último bullet.
+O fundo NÃO inclui:
+- O título da PRÓXIMA tabela ("Tabela N+1 — ...").
+- Cabeçalhos de seção do documento ("5. CRITÉRIOS", "6. PROCEDIMENTO").
+- Rodapé genérico da página (número de revisão, copyright, carimbo).
+Se em dúvida, pare ANTES do próximo título/seção e deixe ~3% de margem abaixo da última linha.
+
+## Bordas LATERAIS (x, w):
+Use a largura total do bloco de conteúdo da tabela. Se a tabela ocupa ~90% da largura da página, use x≈0.03, w≈0.94. Não corte colunas.
+
+# NÃO DETECTAR
+- Parágrafos de texto corrido sem estrutura tabular.
+- Cabeçalhos de seção isolados.
+- Diagramas, figuras, fotos, assinaturas, carimbos.
+- Cabeçalho/rodapé genérico da página.
+
+# CASOS ESPECIAIS
+- **Tabela quebrada entre páginas**: detecte apenas a parte visível nesta página como uma tabela independente. Use o título se visível, senão "Continuação — [descrição]".
+- **Múltiplas tabelas na mesma página**: cada uma é um objeto separado no array. Não junte tabelas distintas num único bbox.
+- **Página sem tabelas**: retorne \`{"tables": []}\`.
+
+Responda APENAS com JSON válido:
 \`{"tables": [{"label": "string", "bbox": [x, y, w, h]}]}\``
 
 async function transcribePage(
