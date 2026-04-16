@@ -395,7 +395,7 @@ export default function Chat() {
                             <p className="text-xs text-muted-foreground mb-2">📎 Fonte visual — clique para ampliar</p>
                             <div className="flex flex-wrap gap-3">
                               {message.sources.map((s, i) => (
-                                <div key={i} className="flex flex-col items-start gap-1 max-w-[220px]">
+                                <div key={i} className="flex flex-col items-start gap-1 max-w-[130px]">
                                   <button
                                     type="button"
                                     className="cursor-zoom-in rounded border border-border overflow-hidden bg-white hover:ring-2 hover:ring-primary/40 transition-shadow"
@@ -404,7 +404,7 @@ export default function Chat() {
                                     <img
                                       src={s.image_url}
                                       alt={s.label ?? `${s.file_name} — página ${s.page}`}
-                                      className="max-h-40 w-auto object-contain"
+                                      className="max-h-24 w-auto object-contain"
                                     />
                                   </button>
                                   <SourceLightbox
