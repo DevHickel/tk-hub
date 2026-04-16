@@ -231,20 +231,18 @@ async function cropAndUploadTables(
   const results: VisionTable[] = []
   for (let i = 0; i < tables.length; i++) {
     const t = tables[i]
-    const [nx, ny, nw, nh] = t.bbox
-    // Extra top padding (8%) because LLM bboxes often miss the title line.
-    const PAD_X = 0.04
+    const [, ny, , nh] = t.bbox
+    // Largura total da página — só recorta verticalmente.
+    // Padding vertical: 8% acima (título), 5% abaixo.
     const PAD_TOP = 0.08
     const PAD_BOTTOM = 0.05
-    const x = Math.max(0, nx - PAD_X)
     const y = Math.max(0, ny - PAD_TOP)
-    const w = Math.min(1 - x, nw + PAD_X * 2)
     const h = Math.min(1 - y, nh + PAD_TOP + PAD_BOTTOM)
-    if (w < 0.05 || h < 0.02) continue
+    if (h < 0.02) continue
 
-    const left = Math.round(x * width)
+    const left = 0
     const top = Math.round(y * height)
-    const cropW = Math.max(1, Math.round(w * width))
+    const cropW = width
     const cropH = Math.max(1, Math.round(h * height))
 
     try {
