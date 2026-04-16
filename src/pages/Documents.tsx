@@ -1029,8 +1029,8 @@ function RagTab() {
     try {
       const apiUrl = import.meta.env.VITE_API_URL;
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${apiUrl}/api/rag-documents`, {
-        method: 'DELETE',
+      const res = await fetch(`${apiUrl}/api/rag-documents/delete`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session?.access_token}`,

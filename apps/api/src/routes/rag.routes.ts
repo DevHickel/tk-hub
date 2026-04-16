@@ -199,16 +199,16 @@ ragRoutes.post('/upload', aiRateLimiter, async (c) => {
   }
 })
 
-// ── DELETE /api/rag-documents ─────────────────────────────────────────────────
+// ── POST /api/rag-documents/delete ───────────────────────────────────────────
 // Exclui um documento RAG: limpa chunks do DB, PDFs do Storage e imagens do bucket document-pages.
-// body: { ids: number[], source_name: string }
+// Usa POST em vez de DELETE porque body em DELETE pode ser ignorado por proxies/frameworks.
 const deleteRagSchema = z.object({
-  ids: z.array(z.number().int()).min(1),
+  ids: z.array(z.number()).min(1),
   source_name: z.string().min(1),
 })
 
-ragRoutes.delete(
-  '/rag-documents',
+ragRoutes.post(
+  '/rag-documents/delete',
   zValidator('json', deleteRagSchema),
   async (c) => {
     const userId = c.get('userId')
