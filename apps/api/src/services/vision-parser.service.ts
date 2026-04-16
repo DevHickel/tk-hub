@@ -72,10 +72,11 @@ Responda APENAS com o markdown transcrito. Sem preâmbulo, sem \`\`\`markdown, s
 const TABLE_DETECTOR_PROMPT = `Você é um detector de tabelas em páginas de PDF. Vou te mostrar uma página em imagem. Sua tarefa é localizar CADA tabela visível e retornar um JSON com suas coordenadas normalizadas (0 a 1) e o título/legenda.
 
 REGRAS:
-1. Considere "tabela" qualquer bloco com colunas e linhas separadas por bordas ou alinhamento consistente — incluindo tabelas com legendas tipo "Tabela 14 — Multímetro Digital".
+1. Considere "tabela" qualquer bloco com colunas e linhas separadas por bordas ou alinhamento consistente — incluindo tabelas com legendas tipo "Tabela 14 — Multímetro Digital". Também considere blocos de texto estruturado com título "Tabela N" mesmo sem bordas visíveis (ex: listas de fatores, modos de calibração).
 2. Para cada tabela, extraia:
    - **label**: o título da tabela EXATAMENTE como aparece no documento (ex: "Tabela 14 — Multímetro Digital"). Se não houver título, invente um curto e descritivo (ex: "Especificações do Torquímetro").
-   - **bbox**: [x, y, w, h] em coordenadas normalizadas (0-1) onde (0,0) é o canto superior-esquerdo da página. Inclua no bbox o TÍTULO da tabela + o corpo + qualquer nota de rodapé vinculada a ela. Deixe uma pequena margem (~2%) ao redor.
+   - **bbox**: [x, y, w, h] em coordenadas normalizadas (0-1) onde (0,0) é o canto superior-esquerdo da página.
+     **CRÍTICO**: O bbox DEVE começar no TÍTULO da tabela (ex: "Tabela 13 — Multímetro Digital"), NÃO no corpo. O topo do bbox (y) é a borda superior do texto do título. O fundo do bbox (y+h) é a última linha de conteúdo da tabela ou nota de rodapé vinculada. Deixe margem de ~5% acima do título e abaixo da última linha.
 3. NÃO inclua parágrafos de texto corrido, cabeçalhos de seção, diagramas, figuras ou assinaturas.
 4. Se a página não tiver nenhuma tabela, retorne \`{"tables": []}\`.
 5. Se houver tabelas sobrepostas ou a mesma tabela quebrada em duas partes visíveis, trate cada bloco visual como uma tabela separada.
@@ -201,12 +202,14 @@ async function cropAndUploadTables(
   for (let i = 0; i < tables.length; i++) {
     const t = tables[i]
     const [nx, ny, nw, nh] = t.bbox
-    // Add 5% padding on each side to compensate for tight LLM bboxes.
-    const PAD = 0.05
-    const x = Math.max(0, nx - PAD)
-    const y = Math.max(0, ny - PAD)
-    const w = Math.min(1 - x, nw + PAD * 2)
-    const h = Math.min(1 - y, nh + PAD * 2)
+    // Extra top padding (8%) because LLM bboxes often miss the title line.
+    const PAD_X = 0.04
+    const PAD_TOP = 0.08
+    const PAD_BOTTOM = 0.05
+    const x = Math.max(0, nx - PAD_X)
+    const y = Math.max(0, ny - PAD_TOP)
+    const w = Math.min(1 - x, nw + PAD_X * 2)
+    const h = Math.min(1 - y, nh + PAD_TOP + PAD_BOTTOM)
     if (w < 0.05 || h < 0.02) continue
 
     const left = Math.round(x * width)
