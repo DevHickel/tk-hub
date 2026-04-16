@@ -233,8 +233,8 @@ async function cropAndUploadTables(
     const t = tables[i]
     const [, ny, , nh] = t.bbox
     // Largura total da página — só recorta verticalmente.
-    // Padding vertical: 8% acima (título), 5% abaixo.
-    const PAD_TOP = 0.08
+    // Padding vertical: 12% acima (título), 5% abaixo.
+    const PAD_TOP = 0.12
     const PAD_BOTTOM = 0.05
     const y = Math.max(0, ny - PAD_TOP)
     const h = Math.min(1 - y, nh + PAD_TOP + PAD_BOTTOM)
