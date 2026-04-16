@@ -203,7 +203,7 @@ ragRoutes.post('/upload', aiRateLimiter, async (c) => {
 // Exclui um documento RAG: limpa chunks do DB, PDFs do Storage e imagens do bucket document-pages.
 // Usa POST em vez de DELETE porque body em DELETE pode ser ignorado por proxies/frameworks.
 const deleteRagSchema = z.object({
-  ids: z.array(z.number()).min(1),
+  ids: z.array(z.union([z.number(), z.string().transform(Number)])).min(1),
   source_name: z.string().min(1),
 })
 
@@ -219,6 +219,7 @@ ragRoutes.post(
     }
 
     const { ids, source_name } = c.req.valid('json')
+    safeLog('info', 'RAG delete iniciado', { userId, userRole, source_name, ids })
 
     try {
       // 1. Buscar file_path do PDF original (todos os chunks têm o mesmo file_path)

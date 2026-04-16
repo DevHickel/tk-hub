@@ -1045,8 +1045,9 @@ function RagTab() {
       if (user) await logActivity(user.id, 'rag_document_deleted', { file_name: doc.source_name });
       await fetchDocs();
     } catch (err) {
-      console.error(err);
-      toast.error('Erro ao excluir documento.');
+      console.error('RAG delete error:', err);
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast.error(`Erro ao excluir documento: ${msg}`);
     } finally {
       setDeletingSource(null);
     }
