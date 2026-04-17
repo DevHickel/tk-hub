@@ -138,6 +138,67 @@ export function chunkMarkdown(text: string, size = 5000, overlap = 500): string[
   return splitRecursive(text, 0).map(c => c.trim()).filter(Boolean)
 }
 
+// ---------------------------------------------------------------------------
+// Chunking semântico por seção — prioriza cortar em fronteiras de heading/tabela
+// para que cada chunk contenha uma seção lógica completa (ex: toda a info de
+// "Esquadro Combinado" fica num único chunk em vez de ser dividida no meio).
+// Se uma seção ultrapassar MAX_CHUNK, sub-splitta com chunkMarkdown.
+// ---------------------------------------------------------------------------
+const SECTION_RE = /^(#{1,4} .+|Tabela\s+\d+\s*[—–-].+)$/gm
+
+export interface SectionChunk {
+  text: string
+  section: string // título da seção (heading ou "Tabela N — ...")
+}
+
+export function chunkBySection(markdown: string, maxChunk = 5000, subOverlap = 300): SectionChunk[] {
+  if (!markdown.trim()) return []
+
+  const matches = [...markdown.matchAll(SECTION_RE)]
+  if (matches.length === 0) {
+    return chunkMarkdown(markdown, maxChunk, subOverlap).map((t) => ({
+      text: t,
+      section: '',
+    }))
+  }
+
+  const sections: { title: string; body: string }[] = []
+  let lastSection = ''
+
+  // Conteúdo antes do primeiro heading
+  const preface = markdown.slice(0, matches[0].index).trim()
+  if (preface) sections.push({ title: '', body: preface })
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i]
+    const title = m[0].replace(/^#+\s*/, '').trim()
+    const start = m.index! + m[0].length
+    const end = i + 1 < matches.length ? matches[i + 1].index! : markdown.length
+    const body = (m[0] + markdown.slice(start, end)).trim()
+
+    // Acumular seções pequenas sob o mesmo heading pai (ex: ### subtítulos)
+    const level = m[0].startsWith('#') ? (m[0].match(/^#+/)![0].length) : 2
+    if (level <= 2) lastSection = title
+
+    sections.push({ title: lastSection || title, body })
+  }
+
+  // Emitir chunks — seções que cabem saem inteiras; grandes sub-splittam
+  const result: SectionChunk[] = []
+  for (const s of sections) {
+    if (s.body.length <= maxChunk) {
+      result.push({ text: s.body, section: s.title })
+    } else {
+      const subs = chunkMarkdown(s.body, maxChunk, subOverlap)
+      for (const sub of subs) {
+        result.push({ text: sub, section: s.title })
+      }
+    }
+  }
+
+  return result
+}
+
 // Chunking por caracteres — legado (só parágrafos). Mantido para compatibilidade.
 export function chunkTextByChars(text: string, size = 5000, overlap = 500): string[] {
   if (text.length <= size) return [text]

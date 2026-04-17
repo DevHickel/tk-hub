@@ -5,7 +5,7 @@ import { QUEUES } from '../queues/index.js'
 import { PdfJobData } from '../queues/pdf.queue.js'
 import { supabase } from '../lib/supabase.js'
 import { parseWithVision } from '../services/vision-parser.service.js'
-import { getOrCreateEmbedding, chunkMarkdown } from '../services/embedding.service.js'
+import { getOrCreateEmbedding, chunkBySection } from '../services/embedding.service.js'
 import { safeLog } from '../lib/logger.js'
 
 async function setDocumentStatus(documentId: string, status: string) {
@@ -56,18 +56,23 @@ export function setupPdfWorker() {
 
         for (let pi = 0; pi < pages.length; pi++) {
           const pageData = pages[pi]
-          const chunks = chunkMarkdown(pageData.text, 5000, 500)
+          const sectionChunks = chunkBySection(pageData.text, 5000, 300)
 
-          for (let ci = 0; ci < chunks.length; ci++) {
-            const chunk = chunks[ci]
-            if (!chunk.trim()) continue
+          for (let ci = 0; ci < sectionChunks.length; ci++) {
+            const sc = sectionChunks[ci]
+            if (!sc.text.trim()) continue
 
-            const embedding = await getOrCreateEmbedding(chunk)
+            // Prefixo de contexto: o embedding captura a hierarquia do documento
+            const contextPrefix = `[Documento: ${fileName} | Pág. ${pageData.page}${sc.section ? ` | Seção: ${sc.section}` : ''}]\n`
+            const enrichedText = contextPrefix + sc.text
+
+            const embedding = await getOrCreateEmbedding(enrichedText)
             const metadata = {
               source: fileName,
               page_number: pageData.page,
               total_pages: pageData.total,
               chunk_index: ci,
+              section_title: sc.section || null,
               page_image_path: pageData.image_path,
               page_tables: pageData.tables ?? [],
             }
@@ -77,7 +82,7 @@ export function setupPdfWorker() {
               await supabase
                 .from('documents')
                 .update({
-                  content: chunk,
+                  content: enrichedText,
                   embedding: JSON.stringify(embedding),
                   metadata,
                   status: 'active',
@@ -89,7 +94,7 @@ export function setupPdfWorker() {
               // Insere novos chunks como linhas independentes na tabela documents
               // com o mesmo file_name para list_rag_documents() agrupá-los corretamente
               await supabase.from('documents').insert({
-                content: chunk,
+                content: enrichedText,
                 embedding: JSON.stringify(embedding),
                 metadata,
                 file_name: fileName,
