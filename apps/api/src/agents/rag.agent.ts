@@ -69,7 +69,7 @@ async function callLLM(
       ...history,
       { role: 'user', content: userMessage },
     ],
-    max_tokens: 1000,
+    max_tokens: 2000,
     temperature: 0.2,
   })
 
@@ -206,8 +206,13 @@ Uma vez selecionado o documento correto, siga estas regras de leitura:
    * *Exemplo:* Converta \`\\varepsilon = 10 + \\frac{L}{60}\` para **\`ε = 10 + L/60 (µm)\`**.
 
 3. **SEPARAÇÃO DE TÓPICOS (HIERARQUIA):**
-   * Se dentro de um mesmo bloco de texto houver subtítulos misturados (ex: "Esquadro Combinado" seguido de "Esquadro 90º"), você deve separá-los visualmente em parágrafos ou bullet points distintos. Não misture regras de equipamentos diferentes na mesma frase.
+   * Se dentro de um mesmo bloco de texto houver subtítulos misturados (ex: "Esquadro Combinado" seguido de "Esquadro 90º" seguido de "Esquadro Simples"), você deve separá-los visualmente em parágrafos ou bullet points distintos. Não misture regras de equipamentos diferentes na mesma frase.
    * As fórmulas, notas e valores que aparecem sob um subtítulo são **exclusivos daquele subtítulo**. NUNCA copie a fórmula do "Esquadro 90° Precisão" como se fosse a do "Esquadro Combinado" (ou vice-versa).
+
+4. **COMPLETUDE OBRIGATÓRIA (REGRA CRÍTICA):**
+   * Ao listar tipos, subtipos ou variantes de um equipamento, você **DEVE** listar **TODOS** os que aparecem no contexto, sem exceção. Se o contexto tem 3 subtipos (ex: Esquadro Combinado, Esquadro 90°, Esquadro Simples), os 3 devem estar na resposta.
+   * **NUNCA** pare após listar apenas os primeiros 2 subtipos. Sempre verifique se há mais variantes no texto.
+   * Se o usuário perguntar genericamente (ex: "me fale sobre esquadros"), a resposta deve cobrir **todos** os subtipos encontrados.
 
 # 6. REGRAS DE RESPOSTA E FORMATAÇÃO
 1. **FONTE ÚNICA:** Responda APENAS com base no contexto. Se não achar, diga: *"Desculpe, analisei os documentos técnicos disponíveis e não encontrei essa especificação específica."*
@@ -251,17 +256,20 @@ Onde cada \`<labelN>\` é copiado **LITERALMENTE** do campo "Tabelas disponívei
 
 # EXEMPLO DE SAÍDA ESPERADA (Few-Shot)
 *Usuário:* "Critério do esquadro"
-*Contexto (Tabela):* \`| 16 | Esquadro | Esquadro Combinado... \\varepsilon = 10 + L/60... |\`
+*Contexto (Tabela):* \`| 16 | Esquadro | ... Esquadro Combinado ... Esquadro 90° ... Para Esquadro Simples ... |\`
 *Resposta:*
 "Para o Esquadro, os critérios de aceitação são:
 
 **Esquadro Combinado:**
-O erro máximo permitido é dado pela fórmula:
-**ε = 10 + L/60 (µm)**
-*Onde L é o comprimento da régua em mm.*
+* O erro máximo permitido para paralelismo e retilinidade é dado pela fórmula: **ε = 10 + L/60 (µm)**, onde L = comprimento da régua em mm.
+* Para deslocamento angular do goniômetro: **0° 30'**.
 
-**Esquadro 90º:**
-Para Esquadros de Precisão, a ortogonalidade é: **t = 20 + Li/10 (µm)**.
+**Esquadro 90°:**
+* Para Esquadros de Precisão, a ortogonalidade máxima permitida é: **t = 20 + Li/10 (µm)**.
+* Planicidade ou Retilinidade: **r = 4 + Li/50 (µm)**, onde Li = Comprimento em mm.
+
+**Esquadro Simples:**
+* Não se mede a Planicidade ou Retilinidade e a tolerância da Ortogonalidade é de **15' (quinze minutos)**.
 
 ---
 📍 **Fonte:** Documento *FD-TKS-QUA-001_R.0.pdf* | Pág. *5*
