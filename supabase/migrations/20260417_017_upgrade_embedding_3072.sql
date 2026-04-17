@@ -1,57 +1,69 @@
 -- Upgrade embeddings de text-embedding-3-small (1536 dims) para text-embedding-3-large (3072 dims)
 -- IMPORTANTE: após aplicar esta migration, é necessário:
--- 1. Limpar a tabela embedding_cache (embeddings antigos são incompatíveis)
--- 2. Re-processar todos os documentos RAG (excluir + re-upload)
+-- 1. Re-processar todos os documentos RAG (excluir + re-upload)
 
 -- ============================================================================
--- 1. Limpar dados incompatíveis
+-- 0. Garantir que enable_vector_extension existe
 -- ============================================================================
-TRUNCATE TABLE public.embedding_cache;
-DELETE FROM public.chunk_feedback;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ============================================================================
--- 2. Alterar colunas de embedding para vector(3072)
+-- 1. Limpar dados incompatíveis (tabelas podem não existir)
 -- ============================================================================
+DO $$
+BEGIN
+  -- embedding_cache pode não existir em todos os ambientes
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'embedding_cache') THEN
+    TRUNCATE TABLE public.embedding_cache;
+    RAISE NOTICE 'embedding_cache limpa';
+  END IF;
 
--- documents.embedding: stored as text/jsonb, cast em queries via ::vector
--- A coluna pode ser text ou vector — vamos garantir que o index aceite 3072
+  -- chunk_feedback sempre existe (migration 015)
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chunk_feedback') THEN
+    DELETE FROM public.chunk_feedback;
+    RAISE NOTICE 'chunk_feedback limpa';
+  END IF;
+END $$;
 
--- Drop indices antigos que dependem de vector(1536)
+-- ============================================================================
+-- 2. documents.embedding → vector(3072)
+-- ============================================================================
 DROP INDEX IF EXISTS idx_documents_embedding;
 DROP INDEX IF EXISTS documents_embedding_idx;
 
--- Alterar tipo se for vector nativo
 DO $$
 BEGIN
-  -- Tentar alterar de vector(1536) para vector(3072)
-  -- Se a coluna for text, isso falha silenciosamente e não tem problema
-  -- porque o cast ::vector aceita qualquer dimensão
-  BEGIN
-    ALTER TABLE public.documents
-      ALTER COLUMN embedding TYPE vector(3072)
-      USING embedding::vector(3072);
-  EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'documents.embedding não é vector nativo, pulando ALTER TYPE';
-  END;
+  ALTER TABLE public.documents
+    ALTER COLUMN embedding TYPE vector(3072)
+    USING NULL;
+  RAISE NOTICE 'documents.embedding alterado para vector(3072)';
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE 'documents.embedding: %', SQLERRM;
 END $$;
 
--- Recriar index IVFFlat para 3072 dims
+-- Recriar index IVFFlat
+-- IVFFlat precisa de ao menos 100 rows para lists=100; usamos HNSW que não tem esse requisito
 CREATE INDEX IF NOT EXISTS idx_documents_embedding
-  ON public.documents USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 100);
+  ON public.documents USING hnsw (embedding vector_cosine_ops);
 
 -- ============================================================================
 -- 3. chunk_feedback.question_embedding → vector(3072)
 -- ============================================================================
-DROP INDEX IF EXISTS idx_chunk_feedback_embedding;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chunk_feedback') THEN
+    DROP INDEX IF EXISTS idx_chunk_feedback_embedding;
 
-ALTER TABLE public.chunk_feedback
-  ALTER COLUMN question_embedding TYPE vector(3072)
-  USING question_embedding::vector(3072);
+    ALTER TABLE public.chunk_feedback
+      ALTER COLUMN question_embedding TYPE vector(3072)
+      USING NULL;
 
-CREATE INDEX IF NOT EXISTS idx_chunk_feedback_embedding
-  ON public.chunk_feedback USING ivfflat (question_embedding vector_cosine_ops)
-  WITH (lists = 100);
+    CREATE INDEX idx_chunk_feedback_embedding
+      ON public.chunk_feedback USING hnsw (question_embedding vector_cosine_ops);
+
+    RAISE NOTICE 'chunk_feedback.question_embedding alterado para vector(3072)';
+  END IF;
+END $$;
 
 -- ============================================================================
 -- 4. Recriar RPCs com vector(3072)
@@ -81,10 +93,10 @@ BEGIN
   RETURN QUERY
   WITH semantic AS (
     SELECT
-      d.id::bigint,
+      d.id::bigint AS id,
       d.content,
       d.metadata,
-      1 - (d.embedding <=> embedding_vector) AS similarity
+      (1 - (d.embedding <=> embedding_vector))::float AS similarity
     FROM public.documents d
     WHERE d.embedding IS NOT NULL
       AND d.content IS NOT NULL
@@ -93,27 +105,27 @@ BEGIN
   ),
   keyword AS (
     SELECT
-      d.id::bigint,
+      d.id::bigint AS id,
       d.content,
       d.metadata,
       ts_rank(
         to_tsvector('portuguese', coalesce(d.content, '')),
         plainto_tsquery('portuguese', query_text)
-      ) AS similarity
+      )::float AS similarity
     FROM public.documents d
     WHERE d.content IS NOT NULL
       AND to_tsvector('portuguese', coalesce(d.content, '')) @@ plainto_tsquery('portuguese', query_text)
     LIMIT match_count * 2
   ),
   combined AS (
-    SELECT sid AS id, scontent AS content, smetadata AS metadata, ssimilarity AS similarity FROM (SELECT id AS sid, content AS scontent, metadata AS smetadata, similarity AS ssimilarity FROM semantic) s
-    UNION
-    SELECT kid AS id, kcontent AS content, kmetadata AS metadata, ksimilarity AS similarity FROM (SELECT id AS kid, content AS kcontent, metadata AS kmetadata, similarity AS ksimilarity FROM keyword) k
+    SELECT * FROM semantic
+    UNION ALL
+    SELECT * FROM keyword
   )
-  SELECT DISTINCT ON (combined.id)
-    combined.id, combined.content, combined.metadata, combined.similarity
-  FROM combined
-  ORDER BY combined.id, combined.similarity DESC
+  SELECT DISTINCT ON (c.id)
+    c.id, c.content, c.metadata, c.similarity
+  FROM combined c
+  ORDER BY c.id, c.similarity DESC
   LIMIT match_count;
 END;
 $$;
@@ -124,6 +136,7 @@ GRANT EXECUTE ON FUNCTION public.hybrid_search(text, text, int) TO service_role;
 -- match_documents_with_feedback
 DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector, int, float, float, float);
 DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector(1536), int, float, float, float);
+DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector(3072), int, float, float, float);
 
 CREATE OR REPLACE FUNCTION public.match_documents_with_feedback(
   query_embedding vector(3072),
@@ -148,7 +161,7 @@ LANGUAGE sql STABLE AS $$
     SELECT d.id, d.content, d.metadata, d.file_name,
            greatest(-20, least(20, d.feedback_score)) AS clamped_score,
            d.feedback_score,
-           1 - (d.embedding <=> query_embedding) AS base_sim
+           (1 - (d.embedding <=> query_embedding))::float AS base_sim
     FROM public.documents d
     WHERE d.embedding IS NOT NULL
     ORDER BY d.embedding <=> query_embedding
@@ -166,12 +179,10 @@ LANGUAGE sql STABLE AS $$
     GROUP BY cf.chunk_id
   )
   SELECT b.id, b.content, b.metadata, b.file_name,
-         b.base_sim
-           + (b.clamped_score * global_weight)
-           + coalesce(ctx.ctx_boost, 0) * context_weight AS similarity,
-         b.base_sim AS base_similarity,
-         b.clamped_score * global_weight AS global_boost,
-         coalesce(ctx.ctx_boost, 0) * context_weight AS contextual_boost,
+         (b.base_sim + (b.clamped_score * global_weight) + coalesce(ctx.ctx_boost, 0) * context_weight)::float AS similarity,
+         b.base_sim::float AS base_similarity,
+         (b.clamped_score * global_weight)::float AS global_boost,
+         (coalesce(ctx.ctx_boost, 0) * context_weight)::float AS contextual_boost,
          b.feedback_score
   FROM base b
   LEFT JOIN ctx ON ctx.chunk_id = b.id
@@ -185,6 +196,7 @@ GRANT EXECUTE ON FUNCTION public.match_documents_with_feedback(vector(3072), int
 -- apply_chunk_feedback
 DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector, smallint);
 DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector(1536), smallint);
+DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector(3072), smallint);
 
 CREATE OR REPLACE FUNCTION public.apply_chunk_feedback(
   p_chunk_ids bigint[],
