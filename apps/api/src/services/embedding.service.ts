@@ -30,6 +30,7 @@ export async function getOrCreateEmbedding(text: string): Promise<number[]> {
   const response = await openai.embeddings.create({
     model: 'text-embedding-3-large',
     input: text,
+    dimensions: 1536,
   })
   const embedding = response.data[0].embedding
 

@@ -1,24 +1,20 @@
--- Upgrade embeddings de text-embedding-3-small (1536 dims) para text-embedding-3-large (3072 dims)
--- IMPORTANTE: após aplicar esta migration, é necessário:
--- 1. Re-processar todos os documentos RAG (excluir + re-upload)
+-- Upgrade modelo de embedding: text-embedding-3-small → text-embedding-3-large
+-- O modelo large usa dimensions=1536 (truncado via API), então as colunas
+-- permanecem vector(1536) — sem mudança de schema. A qualidade melhora porque
+-- o modelo large tem representações mais ricas mesmo truncadas (Matryoshka).
+--
+-- IMPORTANTE: após aplicar, re-processar todos os documentos RAG (excluir + re-upload)
 
 -- ============================================================================
--- 0. Garantir que enable_vector_extension existe
--- ============================================================================
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- ============================================================================
--- 1. Limpar dados incompatíveis (tabelas podem não existir)
+-- 1. Limpar dados incompatíveis (embeddings antigos gerados com modelo small)
 -- ============================================================================
 DO $$
 BEGIN
-  -- embedding_cache pode não existir em todos os ambientes
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'embedding_cache') THEN
     TRUNCATE TABLE public.embedding_cache;
     RAISE NOTICE 'embedding_cache limpa';
   END IF;
 
-  -- chunk_feedback sempre existe (migration 015)
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chunk_feedback') THEN
     DELETE FROM public.chunk_feedback;
     RAISE NOTICE 'chunk_feedback limpa';
@@ -26,50 +22,15 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- 2. documents.embedding → vector(3072)
+-- 2. Nullificar embeddings antigos nos documentos (forçar re-geração)
 -- ============================================================================
-DROP INDEX IF EXISTS idx_documents_embedding;
-DROP INDEX IF EXISTS documents_embedding_idx;
-
-DO $$
-BEGIN
-  ALTER TABLE public.documents
-    ALTER COLUMN embedding TYPE vector(3072)
-    USING NULL;
-  RAISE NOTICE 'documents.embedding alterado para vector(3072)';
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'documents.embedding: %', SQLERRM;
-END $$;
-
--- Recriar index IVFFlat
--- IVFFlat precisa de ao menos 100 rows para lists=100; usamos HNSW que não tem esse requisito
-CREATE INDEX IF NOT EXISTS idx_documents_embedding
-  ON public.documents USING hnsw (embedding vector_cosine_ops);
+UPDATE public.documents SET embedding = NULL WHERE embedding IS NOT NULL;
 
 -- ============================================================================
--- 3. chunk_feedback.question_embedding → vector(3072)
--- ============================================================================
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'chunk_feedback') THEN
-    DROP INDEX IF EXISTS idx_chunk_feedback_embedding;
-
-    ALTER TABLE public.chunk_feedback
-      ALTER COLUMN question_embedding TYPE vector(3072)
-      USING NULL;
-
-    CREATE INDEX idx_chunk_feedback_embedding
-      ON public.chunk_feedback USING hnsw (question_embedding vector_cosine_ops);
-
-    RAISE NOTICE 'chunk_feedback.question_embedding alterado para vector(3072)';
-  END IF;
-END $$;
-
--- ============================================================================
--- 4. Recriar RPCs com vector(3072)
+-- 3. Recriar RPCs (sem mudança de tipo, apenas refresh)
 -- ============================================================================
 
--- hybrid_search
+-- hybrid_search (já existe com vector(1536), recriar para garantir)
 DROP FUNCTION IF EXISTS public.hybrid_search(text, text, int);
 
 CREATE OR REPLACE FUNCTION public.hybrid_search(
@@ -86,17 +47,17 @@ RETURNS TABLE(
 LANGUAGE plpgsql STABLE SECURITY DEFINER
 AS $$
 DECLARE
-  embedding_vector vector(3072);
+  embedding_vector vector(1536);
 BEGIN
   embedding_vector := query_embedding::vector;
 
   RETURN QUERY
   WITH semantic AS (
     SELECT
-      d.id::bigint AS id,
-      d.content,
-      d.metadata,
-      (1 - (d.embedding <=> embedding_vector))::float AS similarity
+      d.id::bigint AS sid,
+      d.content AS scontent,
+      d.metadata AS smetadata,
+      (1 - (d.embedding <=> embedding_vector))::float AS ssimilarity
     FROM public.documents d
     WHERE d.embedding IS NOT NULL
       AND d.content IS NOT NULL
@@ -105,22 +66,22 @@ BEGIN
   ),
   keyword AS (
     SELECT
-      d.id::bigint AS id,
-      d.content,
-      d.metadata,
+      d.id::bigint AS kid,
+      d.content AS kcontent,
+      d.metadata AS kmetadata,
       ts_rank(
         to_tsvector('portuguese', coalesce(d.content, '')),
         plainto_tsquery('portuguese', query_text)
-      )::float AS similarity
+      )::float AS ksimilarty
     FROM public.documents d
     WHERE d.content IS NOT NULL
       AND to_tsvector('portuguese', coalesce(d.content, '')) @@ plainto_tsquery('portuguese', query_text)
     LIMIT match_count * 2
   ),
   combined AS (
-    SELECT * FROM semantic
+    SELECT sid AS id, scontent AS content, smetadata AS metadata, ssimilarity AS similarity FROM semantic
     UNION ALL
-    SELECT * FROM keyword
+    SELECT kid, kcontent, kmetadata, ksimilarty FROM keyword
   )
   SELECT DISTINCT ON (c.id)
     c.id, c.content, c.metadata, c.similarity
@@ -133,13 +94,12 @@ $$;
 GRANT EXECUTE ON FUNCTION public.hybrid_search(text, text, int) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.hybrid_search(text, text, int) TO service_role;
 
--- match_documents_with_feedback
+-- match_documents_with_feedback (recriar para garantir consistência)
 DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector, int, float, float, float);
 DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector(1536), int, float, float, float);
-DROP FUNCTION IF EXISTS public.match_documents_with_feedback(vector(3072), int, float, float, float);
 
 CREATE OR REPLACE FUNCTION public.match_documents_with_feedback(
-  query_embedding vector(3072),
+  query_embedding vector(1536),
   match_count int default 10,
   global_weight float default 0.01,
   context_weight float default 0.15,
@@ -190,20 +150,19 @@ LANGUAGE sql STABLE AS $$
   LIMIT match_count;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.match_documents_with_feedback(vector(3072), int, float, float, float)
+GRANT EXECUTE ON FUNCTION public.match_documents_with_feedback(vector(1536), int, float, float, float)
   TO authenticated, service_role;
 
--- apply_chunk_feedback
+-- apply_chunk_feedback (recriar para garantir consistência)
 DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector, smallint);
 DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector(1536), smallint);
-DROP FUNCTION IF EXISTS public.apply_chunk_feedback(bigint[], uuid, text, text, vector(3072), smallint);
 
 CREATE OR REPLACE FUNCTION public.apply_chunk_feedback(
   p_chunk_ids bigint[],
   p_user_id uuid,
   p_question text,
   p_question_hash text,
-  p_question_embedding vector(3072),
+  p_question_embedding vector(1536),
   p_score smallint
 ) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -234,5 +193,5 @@ BEGIN
   END LOOP;
 END $$;
 
-GRANT EXECUTE ON FUNCTION public.apply_chunk_feedback(bigint[], uuid, text, text, vector(3072), smallint)
+GRANT EXECUTE ON FUNCTION public.apply_chunk_feedback(bigint[], uuid, text, text, vector(1536), smallint)
   TO service_role;
