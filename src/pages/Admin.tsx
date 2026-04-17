@@ -81,7 +81,7 @@ const getActionLabel = (action: string): string => {
 export default function Admin() {
   const navigate = useNavigate();
   const { profile, user, appRoles } = useAuth();
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -411,7 +411,7 @@ export default function Admin() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b bg-card flex items-center justify-between px-6">

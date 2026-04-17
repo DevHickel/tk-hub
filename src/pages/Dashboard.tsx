@@ -53,7 +53,7 @@ interface ExpiringCert {
 export default function Dashboard() {
   const { user, profile, signOut, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -146,7 +146,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">

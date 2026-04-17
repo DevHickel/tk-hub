@@ -475,12 +475,12 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
 export default function ReportSettings() {
   const { isAdmin, profile } = useAuth()
 
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed()
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed()
   const canEdit = isAdmin || ['manager', 'tk_master'].includes((profile as { role?: string })?.role ?? '')
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

@@ -117,7 +117,7 @@ const PAGE_SIZE = 20;
 export default function Documents() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const [searchParams] = useSearchParams();
   const initialExpiryFilter = searchParams.get('expiry') ?? 'all';
 
@@ -128,7 +128,7 @@ export default function Documents() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
           <div>

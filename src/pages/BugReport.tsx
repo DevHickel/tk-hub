@@ -35,7 +35,7 @@ interface BugReportData {
 export default function BugReport() {
   const navigate = useNavigate();
   const { user, profile, appRoles } = useAuth();
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const [description, setDescription] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -260,7 +260,7 @@ export default function BugReport() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b bg-card flex items-center justify-between px-6">

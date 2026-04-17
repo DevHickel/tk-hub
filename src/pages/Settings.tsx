@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 export default function Settings() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
-  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const { theme, setTheme } = useTheme();
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -165,7 +165,7 @@ export default function Settings() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b bg-card flex items-center justify-between px-6">
