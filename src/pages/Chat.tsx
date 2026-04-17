@@ -556,7 +556,9 @@ function ConvItem({
           onClick={e => e.stopPropagation()}
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate text-xs">{conv.title}</span>
+        <span className="min-w-0 flex-1 truncate text-xs">
+          {conv.title.length > 25 ? conv.title.slice(0, 25) + '...' : conv.title}
+        </span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
