@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { api, type ReportConfig, type ReportRecipient } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AppSidebar } from '@/components/AppSidebar'
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -474,11 +475,12 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
 export default function ReportSettings() {
   const { isAdmin, profile } = useAuth()
 
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed()
   const canEdit = isAdmin || ['manager', 'tk_master'].includes((profile as { role?: string })?.role ?? '')
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}

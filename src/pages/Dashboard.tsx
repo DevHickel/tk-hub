@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import {
   FileText,
   AlertTriangle,
@@ -52,6 +53,7 @@ interface ExpiringCert {
 export default function Dashboard() {
   const { user, profile, signOut, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed();
 
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -144,7 +146,7 @@ export default function Dashboard() {
 
   return (
     <div className="flex h-screen bg-background">
-      <AppSidebar />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">

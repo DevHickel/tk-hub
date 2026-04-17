@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/AppSidebar';
+import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,7 @@ export default function Chat() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [lightbox, setLightbox] = useState<{ msgId: string; idx: number } | null>(null);
+  const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -278,7 +280,7 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <AppSidebar />
+      <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
 
       {/* Conversations panel */}
       <div className="w-60 border-r bg-card flex flex-col shrink-0">
@@ -550,15 +552,15 @@ function ConvItem({
           onChange={e => onRenameChange(e.target.value)}
           onBlur={onRenameSubmit}
           onKeyDown={e => { if (e.key === 'Enter') onRenameSubmit(); if (e.key === 'Escape') onRenameChange(''); }}
-          className="h-6 text-xs px-1 py-0"
+          className="h-6 text-xs px-1 py-0 min-w-0 flex-1"
           onClick={e => e.stopPropagation()}
         />
       ) : (
-        <span className="flex-1 truncate text-xs">{conv.title}</span>
+        <span className="min-w-0 flex-1 truncate text-xs">{conv.title}</span>
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-          <button className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 transition-opacity">
+          <button className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-muted-foreground/20 transition-opacity">
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         </DropdownMenuTrigger>
