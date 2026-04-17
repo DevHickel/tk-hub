@@ -186,6 +186,12 @@ Ao analisar o \`CONTEXTO\`, você deve decidir qual arquivo priorizar baseando-s
 # 5. REGRAS DE EXTRAÇÃO E LEITURA (RAG STRICT MODE)
 Uma vez selecionado o documento correto, siga estas regras de leitura:
 
+0. **LEIA TODOS OS CHUNKS (REGRA ZERO — MAIS IMPORTANTE):**
+   * Antes de responder, leia **TODOS** os chunks do CONTEXTO, não apenas o Chunk #1.
+   * O chunk com a resposta pode estar em qualquer posição (#1, #5, #10...). Chunks de páginas vizinhas frequentemente contêm informações complementares essenciais.
+   * Se o usuário pergunta sobre "modo de calibração do Multímetro Digital" e o Chunk #1 tem especificações técnicas mas o Chunk #8 tem o modo de calibração — use o Chunk #8.
+   * **NUNCA diga "não encontrei" ou "não está detalhado" sem ter verificado TODOS os chunks.** Se a informação está em qualquer chunk do contexto, você DEVE usá-la.
+
 1. **RASTREAMENTO VISUAL (TABELAS MARKDOWN):**
    * O texto está estruturado em tabelas. Se o usuário pede sobre um equipamento (ex: "Esquadro"), foque **exclusivamente na LINHA** que começa com esse nome.
    * **Algoritmo:** Procure a linha \`| [Número] | Esquadro | ... |\`.
@@ -297,12 +303,17 @@ ${context}`
     // 8. Extrair marcador `TABLES_USED:` do final da resposta. Isso permite o LLM
     // declarar quais tabelas ele de fato consultou — evita mostrar crops irrelevantes
     // que só ranquearam por conterem o nome do equipamento como coluna.
+    // Log da resposta bruta para diagnóstico da linha TABLES_USED
+    const lastLines = result.answer.split('\n').slice(-5).join('\n')
+    safeLog('info', 'answer tail (pre-strip)', { lastLines })
+
     const extracted = extractUsedTableLabels(result.answer)
     result.answer = extracted.answer
     const usedLabels = new Set((extracted.labels ?? []).map((l) => l.toLowerCase()))
     safeLog('info', 'TABLES_USED parsed', {
       declared: extracted.labels,
       count: extracted.labels?.length ?? null,
+      fallbackMode: extracted.labels === null ? 'LLM_OMITTED' : extracted.labels.length === 0 ? 'NONE' : 'GUIDED',
     })
 
     // 9. Montar `sources[]`. Modo guiado: se o LLM citou labels, só devolve esses crops.
@@ -338,24 +349,16 @@ ${context}`
       }
     }
 
-    // Fallback: LLM não declarou OU nenhum crop bateu com os labels citados.
+    // Fallback: LLM não declarou TABLES_USED ou nenhum crop bateu.
+    // Só mostra página inteira do top chunk — NUNCA crops aleatórios, pois podem ser
+    // de tabelas irrelevantes que só ranquearam por conter o nome do equipamento.
     if (sources.length === 0) {
       for (const chunk of ranked) {
-        if (sources.length >= 3) break
+        if (sources.length >= 2) break
         const fileName = (chunk.metadata?.source as string | undefined) ?? null
         const pageRaw = chunk.metadata?.page_number ?? chunk.metadata?.page
         const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw)
         if (!fileName || !Number.isFinite(page)) continue
-
-        const tables = (chunk.metadata?.page_tables as Array<{ label: string; image_path: string }> | undefined) ?? []
-        if (tables.length > 0) {
-          for (const t of tables) {
-            if (sources.length >= 3) break
-            if (!t?.image_path) continue
-            pushSource(fileName, page, t.image_path, t.label)
-          }
-          continue
-        }
 
         const imagePath = chunk.metadata?.page_image_path as string | undefined
         if (imagePath) pushSource(fileName, page, imagePath)
