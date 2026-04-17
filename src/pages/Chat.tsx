@@ -291,8 +291,8 @@ export default function Chat() {
           </Button>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+        <ScrollArea className="flex-1 [&>div>div]:!overflow-x-hidden">
+          <div className="p-2 space-y-1 overflow-hidden">
             {pinnedConvs.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Fixadas</p>
