@@ -17,6 +17,7 @@ import {
   Trash2,
   Pin,
   PinOff,
+  Pencil,
   MoreHorizontal,
   ThumbsUp,
   ThumbsDown,
@@ -568,7 +569,7 @@ function ConvItem({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuItem onClick={e => { e.stopPropagation(); onRenameStart(); }}>
-            Renomear
+            <Pencil className="h-3.5 w-3.5 mr-2" />Renomear
           </DropdownMenuItem>
           <DropdownMenuItem onClick={e => { e.stopPropagation(); onPin(); }}>
             {conv.is_pinned ? (
