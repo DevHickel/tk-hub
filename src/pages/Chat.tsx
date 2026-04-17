@@ -283,7 +283,7 @@ export default function Chat() {
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
 
       {/* Conversations panel */}
-      <div className="w-60 border-r bg-card flex flex-col shrink-0">
+      <div className="w-60 border-r bg-card flex flex-col shrink-0 overflow-hidden">
         <div className="p-3 border-b">
           <Button className="w-full gap-2" onClick={handleNewConversation}>
             <Plus className="h-4 w-4" />
@@ -539,7 +539,7 @@ function ConvItem({
   return (
     <div
       className={cn(
-        'group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm transition-colors',
+        'group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm transition-colors min-w-0',
         active ? 'bg-[#004C97]/10 text-[#004C97] dark:text-blue-400' : 'hover:bg-muted'
       )}
       onClick={onSelect}
