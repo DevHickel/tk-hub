@@ -114,6 +114,105 @@ Use a largura total do bloco de conteúdo da tabela. Se a tabela ocupa ~90% da l
 Responda APENAS com JSON válido:
 \`{"tables": [{"label": "string", "bbox": [x, y, w, h]}]}\``
 
+const VALIDATION_PROMPT = `Você é um revisor de transcrições de documentos técnicos. Vou te mostrar a IMAGEM ORIGINAL de uma página e o MARKDOWN que foi gerado a partir dela. Compare os dois e identifique TUDO que está faltando ou errado no markdown.
+
+FOQUE EM:
+1. Subtipos/variantes omitidos (ex: documento tem "Esquadro Combinado", "Esquadro 90°" E "Esquadro Simples", mas markdown só tem 2 deles)
+2. Valores numéricos, fórmulas ou unidades que foram perdidos ou alterados
+3. Linhas de tabela inteiras que foram omitidas
+4. Notas de rodapé, observações ou condições que sumiram
+5. Títulos de seção ou subtítulos que não foram transcritos
+
+NÃO REPORTE:
+- Diferenças de formatação que não mudam o conteúdo (negrito vs normal, etc)
+- Conteúdo de cabeçalho/rodapé genérico da página (número de revisão, copyright)
+
+Retorne JSON válido:
+{"issues": [{"type": "missing_content", "description": "...o que falta..."}, ...]}
+
+Se o markdown está completo e fiel à imagem, retorne: {"issues": []}`
+
+async function validateTranscription(
+  imageBytes: Uint8Array,
+  markdown: string,
+  pageNumber: number,
+  mimeType: string = 'image/png'
+): Promise<string> {
+  const base64 = Buffer.from(imageBytes).toString('base64')
+  const dataUrl = `data:${mimeType};base64,${base64}`
+
+  const checkResponse = await openai.chat.completions.create({
+    model: VISION_MODEL,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: VALIDATION_PROMPT },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Página ${pageNumber}.\n\nMARKDOWN GERADO:\n${markdown.slice(0, 6000)}`,
+          },
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+        ],
+      },
+    ],
+    temperature: 0,
+    max_tokens: 1500,
+  })
+
+  const raw = checkResponse.choices[0]?.message?.content ?? '{}'
+  try {
+    const parsed = JSON.parse(raw) as { issues?: Array<{ description?: string }> }
+    if (!Array.isArray(parsed.issues) || parsed.issues.length === 0) {
+      safeLog('info', 'validation OK — sem problemas', { page: pageNumber })
+      return markdown
+    }
+
+    const issueList = parsed.issues
+      .map((i) => (typeof i?.description === 'string' ? i.description : ''))
+      .filter((d) => d.length > 0)
+
+    safeLog('info', 'validation encontrou problemas — corrigindo', {
+      page: pageNumber,
+      issues: issueList.length,
+    })
+
+    const correctionResponse = await openai.chat.completions.create({
+      model: VISION_MODEL,
+      messages: [
+        { role: 'system', content: TRANSCRIBE_PROMPT },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Página ${pageNumber}. A transcrição anterior OMITIU as seguintes informações:\n${issueList.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}\n\nRefaça a transcrição COMPLETA em markdown, incluindo TODOS os itens acima.`,
+            },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } },
+          ],
+        },
+      ],
+      temperature: 0,
+      max_tokens: 5000,
+    })
+
+    const corrected = correctionResponse.choices[0]?.message?.content?.trim() ?? ''
+    if (corrected.length > markdown.length * 0.5) {
+      safeLog('info', 'transcrição corrigida aceita', {
+        page: pageNumber,
+        originalChars: markdown.length,
+        correctedChars: corrected.length,
+      })
+      return corrected
+    }
+    return markdown
+  } catch {
+    safeLog('warn', 'validation JSON parse failed', { page: pageNumber })
+    return markdown
+  }
+}
+
 async function transcribePage(
   imageBytes: Uint8Array,
   pageNumber: number,
@@ -144,7 +243,10 @@ async function transcribePage(
     chars: text.length,
     tokens: response.usage?.total_tokens,
   })
-  return text
+
+  if (text.length === 0) return text
+
+  return validateTranscription(imageBytes, text, pageNumber, mimeType)
 }
 
 interface DetectedTable {

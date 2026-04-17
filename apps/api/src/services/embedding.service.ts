@@ -28,7 +28,7 @@ export async function getOrCreateEmbedding(text: string): Promise<number[]> {
 
   // 2. gerar novo embedding — custa dinheiro
   const response = await openai.embeddings.create({
-    model: 'text-embedding-3-small', // NUNCA large (rag-pipeline/SKILL.md)
+    model: 'text-embedding-3-large',
     input: text,
   })
   const embedding = response.data[0].embedding

@@ -126,6 +126,81 @@ export async function answerQuestion(
       topContextBoost: ranked[0]?.contextual_boost,
     })
 
+    // 3b. Hybrid search boost — chunks que batem por keyword ganham +0.1
+    const { data: keywordHits } = await supabase.rpc(
+      'hybrid_search' as never,
+      {
+        query_text: trimmed,
+        query_embedding: JSON.stringify(questionEmbedding),
+        match_count: 10,
+      } as never
+    )
+    const keywordIds = new Set(
+      ((keywordHits as Array<{ id: number }>) ?? []).map((h) => h.id)
+    )
+    for (const chunk of ranked) {
+      if (keywordIds.has(chunk.id)) {
+        chunk.similarity = (chunk.similarity ?? 0) + 0.1
+      }
+    }
+    ranked.sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+
+    safeLog('info', 'hybrid boost applied', { keywordHits: keywordIds.size, boosted: ranked.filter((c) => keywordIds.has(c.id)).length })
+
+    // 3c. Re-ranking com LLM — pontua relevância 0-10 de cada chunk
+    if (ranked.length > 0) {
+      const rerankInput = ranked
+        .slice(0, 15)
+        .map((c, i) => `[${i}] ${c.content.slice(0, 500)}`)
+        .join('\n---\n')
+
+      try {
+        const rerankResponse = await openai.chat.completions.create({
+          model: 'gpt-4.1-mini',
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: `Você é um ranqueador de relevância. O usuário fez uma pergunta e eu tenho ${Math.min(ranked.length, 15)} trechos de documentos. Pontue cada trecho de 0 a 10 quanto à relevância para responder a pergunta. Retorne JSON: {"scores": [{"index": 0, "score": 8}, ...]}. Inclua TODOS os trechos.`,
+            },
+            {
+              role: 'user',
+              content: `PERGUNTA: ${trimmed}\n\nTRECHOS:\n${rerankInput}`,
+            },
+          ],
+          temperature: 0,
+          max_tokens: 500,
+        })
+
+        const rerankRaw = rerankResponse.choices[0]?.message?.content ?? '{}'
+        const rerankParsed = JSON.parse(rerankRaw) as { scores?: Array<{ index: number; score: number }> }
+
+        if (Array.isArray(rerankParsed.scores)) {
+          const scoreMap = new Map(
+            rerankParsed.scores
+              .filter((s) => typeof s.index === 'number' && typeof s.score === 'number')
+              .map((s) => [s.index, s.score])
+          )
+          // Filtrar chunks com score < 4 e reordenar
+          const reranked = ranked
+            .map((c, i) => ({ ...c, rerankScore: scoreMap.get(i) ?? 5 }))
+            .filter((c) => c.rerankScore >= 4)
+            .sort((a, b) => b.rerankScore - a.rerankScore)
+
+          safeLog('info', 'rerank result', {
+            before: ranked.length,
+            after: reranked.length,
+            topScore: reranked[0]?.rerankScore,
+          })
+
+          ranked.length = 0
+          ranked.push(...reranked)
+        }
+      } catch (err) {
+        safeLog('warn', 'rerank failed — using original order', { error: (err as Error).message })
+      }
+    }
+
     // Log diagnóstico: o que o LLM vai realmente ver.
     for (let i = 0; i < Math.min(ranked.length, 10); i++) {
       const c = ranked[i]
@@ -139,7 +214,7 @@ export async function answerQuestion(
     }
 
     // Contexto sem truncagem per-chunk. Limite total 60k chars — gpt-4.1-mini
-    // tem 128k tokens de janela, sobra espaço. O n8n envia os 10 chunks inteiros.
+    // tem 128k tokens de janela, sobra espaço.
     const context = ranked
       .map((chunk, i) => {
         const source = (chunk.metadata?.source as string) ?? 'desconhecido'
