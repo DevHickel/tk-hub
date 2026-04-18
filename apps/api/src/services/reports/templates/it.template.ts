@@ -31,9 +31,9 @@ export function buildITEmail(
   const satisfactionPct = totalFeedback > 0 ? Math.round((metrics.feedback_positive / totalFeedback) * 100) : 0
   const satisfactionColor = satisfactionPct >= 80 ? '#22C55E' : satisfactionPct >= 60 ? '#F59E0B' : '#EF4444'
 
-  // Processing health
-  const docsTotal = metrics.docs_processed + metrics.docs_error_week
-  const successRate = docsTotal > 0 ? Math.round((metrics.docs_processed / docsTotal) * 100) : 100
+  // Processing health (RAG docs)
+  const docsTotal = metrics.rag_docs_week + metrics.docs_error_week
+  const successRate = docsTotal > 0 ? Math.round((metrics.rag_docs_week / docsTotal) * 100) : 100
   const successColor = successRate >= 95 ? '#22C55E' : successRate >= 80 ? '#F59E0B' : '#EF4444'
 
   return `<!DOCTYPE html>
@@ -126,11 +126,11 @@ export function buildITEmail(
       ${totalFeedback > 0 ? `<tr><td>Feedback dos usuários</td><td>👍 ${metrics.feedback_positive} / 👎 ${metrics.feedback_negative}</td></tr>` : ''}
     </table>
 
-    <!-- Processamento de documentos -->
-    <h3>📄 Processamento de documentos</h3>
+    <!-- Documentos RAG -->
+    <h3>📄 Documentos RAG</h3>
     <table>
-      <tr><td>Documentos processados</td><td>${metrics.docs_processed}</td></tr>
-      <tr><td>Certificados recebidos por e-mail</td><td>${metrics.emails_processed}</td></tr>
+      <tr><td>Documentos indexados</td><td>${metrics.rag_docs_total}</td></tr>
+      <tr><td>Adicionados na semana</td><td>${metrics.rag_docs_week}</td></tr>
       <tr><td>Erros de processamento</td><td style="color:${metrics.docs_error_week > 0 ? '#EF4444' : 'inherit'}">${metrics.docs_error_week}</td></tr>
       <tr><td>Em processamento agora</td><td style="color:${metrics.docs_processing > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_processing}</td></tr>
     </table>
@@ -138,7 +138,7 @@ export function buildITEmail(
     <!-- Infraestrutura RAG -->
     <h3>🗄️ Base de conhecimento</h3>
     <table>
-      <tr><td>Total de documentos ativos</td><td>${metrics.total_certs}</td></tr>
+      <tr><td>Total de documentos RAG</td><td>${metrics.rag_docs_total}</td></tr>
       <tr><td>Chunks no índice vetorial</td><td>${formatNumber(metrics.total_chunks)}</td></tr>
       <tr><td>Embeddings em cache</td><td>${formatNumber(metrics.total_cache_entries)}</td></tr>
       <tr><td>Cache hit rate</td><td style="color:${cacheColor}">${cacheRate}% ${cacheRate >= 60 ? '✅' : '⚠️'}</td></tr>

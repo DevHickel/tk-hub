@@ -180,12 +180,12 @@ function buildCertTable(certs: ExpiringCert[], color: string, expired = false): 
     </tr></thead>
     <tbody>
       ${certs.map((c) => {
-        const days = Math.ceil((new Date(c.data_vencimento!).getTime() - Date.now()) / 86400000)
+        const days = Math.ceil((new Date(c.expiry_date!).getTime() - Date.now()) / 86400000)
         const displayDays = expired ? Math.abs(days) : days
         return `<tr>
-          <td>${c.colaborador ?? '—'}</td>
-          <td><span class="badge" style="background:#f1f5f9;color:#334155">${c.tipo ?? '—'}</span></td>
-          <td>${format(new Date(c.data_vencimento!), 'dd/MM/yyyy')}</td>
+          <td>${c.employee_name ?? '—'}</td>
+          <td><span class="badge" style="background:#f1f5f9;color:#334155">${c.course_name ?? '—'}</span></td>
+          <td>${format(new Date(c.expiry_date!), 'dd/MM/yyyy')}</td>
           <td style="text-align:right;font-weight:600;color:${color}">${expired ? `-${displayDays}d` : `${displayDays}d`}</td>
         </tr>`
       }).join('')}

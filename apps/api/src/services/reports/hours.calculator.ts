@@ -21,22 +21,21 @@ export interface ReportConfig {
 }
 
 export interface ExpiringCert {
-  colaborador: string | null
-  data_vencimento: string | null
-  tipo: string | null
+  employee_name: string | null
+  expiry_date: string | null
+  course_name: string | null
   file_name: string | null
 }
 
 export interface WeekMetrics {
   rag_queries: number
-  docs_processed: number
+  rag_docs_total: number         // documentos RAG indexados (distintos)
+  rag_docs_week: number          // documentos RAG adicionados na semana
   alerts_sent: number
   emails_processed: number
   model_usage: Array<{ model_used: string; tokens_used: number | null }>
   cache_hits: number
-  docs_expiring: Array<{ colaborador: string | null; data_vencimento: string | null }>
-  docs_expired: number
-  // HR-specific
+  // Certificados (tabela processed_certificates)
   total_certs: number
   certs_processed_week: number
   certs_by_type: Array<{ tipo: string; count: number }>
@@ -48,8 +47,10 @@ export interface WeekMetrics {
     day15: ExpiringCert[]
     day30: ExpiringCert[]
   }
+  certs_expiring_count: number   // total vencendo em 30 dias
+  certs_expired_count: number    // total vencidos
   collaborators_with_expired: Array<{ colaborador: string; count: number }>
-  // IT-specific
+  // IT-specific (tabela documents = RAG chunks)
   total_chunks: number
   total_cache_entries: number
   docs_error_week: number
@@ -77,7 +78,7 @@ export function calcHoursSaved(metrics: WeekMetrics, config: ReportConfig): Hour
 
   const minutesSaved =
     metrics.rag_queries      * b.search +
-    metrics.docs_processed   * b.doc_process +
+    metrics.certs_processed_week * b.doc_process +
     metrics.emails_processed * b.email
 
   const hoursSaved = minutesSaved / 60

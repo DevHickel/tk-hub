@@ -7,55 +7,36 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
   const today = new Date().toISOString().split('T')[0]
   const in30  = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
 
-  // ── Batch 1: queries gerais + HR + IT ──────────────────────────────────────
+  // ── Batch 1: todas as queries em paralelo ─────────────────────────────────
   const [
+    // Métricas gerais
     ragQueriesRes,
-    docsProcessedRes,
-    docsExpiringRes,
-    docsExpiredRes,
     emailsRes,
     cacheRes,
     modelRes,
+    // Certificados (processed_certificates)
     totalCertsRes,
     certsWeekRes,
     certsByTypeRes,
-    allExpiringRes,
-    expiredCertsDetailRes,
-    // IT-specific
+    certsExpiringRes,
+    certsExpiredRes,
+    // Documentos RAG (documents)
+    ragDocsTotalRes,
+    ragDocsWeekRes,
     totalChunksRes,
     totalCacheRes,
     docsErrorRes,
     docsProcessingRes,
+    // Usuários e feedback
     activeUsersRes,
     feedbackRes,
   ] = await Promise.all([
-    // Métricas gerais
+    // ── Métricas gerais ──────────────────────────────────────────────────
     supabase
       .from('chat_history')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', start)
       .lte('created_at', end),
-
-    supabase
-      .from('documents')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .gte('created_at', start)
-      .lte('created_at', end),
-
-    supabase
-      .from('documents')
-      .select('colaborador, data_vencimento')
-      .eq('status', 'active')
-      .not('data_vencimento', 'is', null)
-      .gte('data_vencimento', today)
-      .lte('data_vencimento', in30),
-
-    supabase
-      .from('documents')
-      .select('id', { count: 'exact', head: true })
-      .lt('data_vencimento', today)
-      .eq('status', 'active'),
 
     supabase
       .from('documents')
@@ -75,58 +56,65 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
       .gte('created_at', start)
       .lte('created_at', end),
 
-    // HR: total de certificados ativos
+    // ── Certificados (processed_certificates) ────────────────────────────
+    // Total de certificados aprovados
     supabase
-      .from('documents')
+      .from('processed_certificates')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'active'),
+      .eq('status', 'approved'),
 
-    // HR: certificados processados na semana
+    // Certificados adicionados na semana
     supabase
-      .from('documents')
+      .from('processed_certificates')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .not('data_vencimento', 'is', null)
       .gte('created_at', start)
       .lte('created_at', end),
 
-    // HR: certificados por tipo
+    // Certificados por tipo (course_name)
+    supabase
+      .from('processed_certificates')
+      .select('course_name')
+      .eq('status', 'approved'),
+
+    // Certificados vencendo em até 30 dias
+    supabase
+      .from('processed_certificates')
+      .select('employee_name, expiry_date, course_name, file_name')
+      .eq('status', 'approved')
+      .not('expiry_date', 'is', null)
+      .gte('expiry_date', today)
+      .lte('expiry_date', in30)
+      .order('expiry_date', { ascending: true }),
+
+    // Certificados já vencidos
+    supabase
+      .from('processed_certificates')
+      .select('employee_name, expiry_date, course_name, file_name')
+      .eq('status', 'expired')
+      .order('expiry_date', { ascending: true }),
+
+    // ── Documentos RAG (documents) ───────────────────────────────────────
+    // Total de documentos RAG (distintos por file_name)
+    supabase.rpc('count_rag_documents'),
+
+    // Documentos RAG adicionados na semana
     supabase
       .from('documents')
-      .select('tipo')
-      .eq('status', 'active')
-      .not('tipo', 'is', null),
+      .select('file_name')
+      .gte('created_at', start)
+      .lte('created_at', end),
 
-    // HR: todos os certificados vencendo em até 30 dias
-    supabase
-      .from('documents')
-      .select('colaborador, data_vencimento, tipo, file_name')
-      .eq('status', 'active')
-      .not('data_vencimento', 'is', null)
-      .gte('data_vencimento', today)
-      .lte('data_vencimento', in30)
-      .order('data_vencimento', { ascending: true }),
-
-    // HR: certificados já vencidos
-    supabase
-      .from('documents')
-      .select('colaborador, data_vencimento, tipo, file_name')
-      .eq('status', 'active')
-      .not('data_vencimento', 'is', null)
-      .lt('data_vencimento', today)
-      .order('data_vencimento', { ascending: true }),
-
-    // IT: total de chunks no índice RAG
+    // Total de chunks no índice
     supabase
       .from('document_chunks')
       .select('id', { count: 'exact', head: true }),
 
-    // IT: total de entradas no cache de embeddings
+    // Total de entradas no cache de embeddings
     supabase
       .from('embedding_cache')
       .select('id', { count: 'exact', head: true }),
 
-    // IT: documentos com erro na semana
+    // Documentos RAG com erro na semana
     supabase
       .from('documents')
       .select('id', { count: 'exact', head: true })
@@ -134,20 +122,19 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
       .gte('created_at', start)
       .lte('created_at', end),
 
-    // IT: documentos ainda processando (possível travamento)
+    // Documentos RAG ainda processando
     supabase
       .from('documents')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'processing'),
 
-    // IT: usuários ativos na semana (distinct user_id)
+    // ── Usuários e feedback ──────────────────────────────────────────────
     supabase
       .from('chat_history')
       .select('user_id')
       .gte('created_at', start)
       .lte('created_at', end),
 
-    // IT: feedback de chunks na semana
     supabase
       .from('chunk_feedback')
       .select('score')
@@ -163,21 +150,22 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
 
   const modelUsage = (modelRes.data ?? []) as WeekMetrics['model_usage']
 
-  // ── HR: agrupar certificados ───────────────────────────────────────────────
+  // ── Certificados: agrupar por tipo ─────────────────────────────────────────
   const typeMap = new Map<string, number>()
-  for (const row of (certsByTypeRes.data ?? []) as Array<{ tipo: string | null }>) {
-    const t = row.tipo ?? 'Outros'
+  for (const row of (certsByTypeRes.data ?? []) as Array<{ course_name: string | null }>) {
+    const t = row.course_name ?? 'Outros'
     typeMap.set(t, (typeMap.get(t) ?? 0) + 1)
   }
   const certs_by_type = Array.from(typeMap.entries())
     .map(([tipo, count]) => ({ tipo, count }))
     .sort((a, b) => b.count - a.count)
 
-  const allExpiring = (allExpiringRes.data ?? []) as Array<{
-    colaborador: string | null; data_vencimento: string | null; tipo: string | null; file_name: string | null
+  // ── Certificados: tiers de vencimento ──────────────────────────────────────
+  const allExpiring = (certsExpiringRes.data ?? []) as Array<{
+    employee_name: string | null; expiry_date: string | null; course_name: string | null; file_name: string | null
   }>
-  const expiredCerts = (expiredCertsDetailRes.data ?? []) as Array<{
-    colaborador: string | null; data_vencimento: string | null; tipo: string | null; file_name: string | null
+  const expiredCerts = (certsExpiredRes.data ?? []) as Array<{
+    employee_name: string | null; expiry_date: string | null; course_name: string | null; file_name: string | null
   }>
 
   const tiers: WeekMetrics['certs_expiring_tiers'] = {
@@ -186,7 +174,7 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
   }
 
   for (const doc of allExpiring) {
-    const days = Math.ceil((new Date(doc.data_vencimento!).getTime() - Date.now()) / 86400000)
+    const days = Math.ceil((new Date(doc.expiry_date!).getTime() - Date.now()) / 86400000)
     const cert = toCert(doc)
     if (days <= 1) tiers.day1.push(cert)
     else if (days <= 3) tiers.day3.push(cert)
@@ -195,22 +183,29 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
     else tiers.day30.push(cert)
   }
 
+  // ── Certificados: colaboradores com vencidos ───────────────────────────────
   const collabMap = new Map<string, number>()
   for (const doc of expiredCerts) {
-    const name = doc.colaborador ?? 'Desconhecido'
+    const name = doc.employee_name ?? 'Desconhecido'
     collabMap.set(name, (collabMap.get(name) ?? 0) + 1)
   }
   const collaborators_with_expired = Array.from(collabMap.entries())
     .map(([colaborador, count]) => ({ colaborador, count }))
     .sort((a, b) => b.count - a.count)
 
-  // ── IT: calcular métricas ──────────────────────────────────────────────────
-  // Usuários ativos (distinct)
+  // ── Documentos RAG: contagem distinta na semana ────────────────────────────
+  const ragDocsWeekNames = new Set(
+    ((ragDocsWeekRes.data ?? []) as Array<{ file_name: string | null }>)
+      .map((r) => r.file_name)
+      .filter(Boolean)
+  )
+
+  // ── Usuários ativos (distinct) ─────────────────────────────────────────────
   const userIds = new Set(
     ((activeUsersRes.data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)
   )
 
-  // Top users por queries — precisamos buscar com nomes
+  // Top users por queries
   const userQueryMap = new Map<string, number>()
   for (const r of (activeUsersRes.data ?? []) as Array<{ user_id: string }>) {
     userQueryMap.set(r.user_id, (userQueryMap.get(r.user_id) ?? 0) + 1)
@@ -219,7 +214,6 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
 
-  // Buscar nomes dos top users
   let top_users: WeekMetrics['top_users'] = []
   if (topUserIds.length > 0) {
     const { data: profiles } = await supabase
@@ -239,35 +233,33 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
     }))
   }
 
-  // Feedback
+  // ── Feedback ───────────────────────────────────────────────────────────────
   const feedbackData = (feedbackRes.data ?? []) as Array<{ score: number }>
   const feedback_positive = feedbackData.filter((f) => f.score > 0).length
   const feedback_negative = feedbackData.filter((f) => f.score < 0).length
 
-  // Tokens
+  // ── Tokens ─────────────────────────────────────────────────────────────────
   const total_tokens_week = modelUsage.reduce((s, r) => s + (r.tokens_used ?? 0), 0)
   const ragQueries = ragQueriesRes.count ?? 0
   const avg_tokens_per_query = ragQueries > 0 ? Math.round(total_tokens_week / ragQueries) : 0
 
   return {
     rag_queries:      ragQueries,
-    docs_processed:   docsProcessedRes.count ?? 0,
+    rag_docs_total:   (ragDocsTotalRes.data as unknown as number) ?? 0,
+    rag_docs_week:    ragDocsWeekNames.size,
     alerts_sent:      0,
     emails_processed: emailsRes.count ?? 0,
     model_usage:      modelUsage,
     cache_hits:       cacheHits,
-    docs_expiring: (docsExpiringRes.data ?? []).map((d) => ({
-      colaborador:      d.colaborador as string | null,
-      data_vencimento:  d.data_vencimento as string | null,
-    })),
-    docs_expired:     docsExpiredRes.count ?? 0,
-    // HR
+    // Certificados
     total_certs:      totalCertsRes.count ?? 0,
     certs_processed_week: certsWeekRes.count ?? 0,
     certs_by_type,
     certs_expiring_tiers: tiers,
+    certs_expiring_count: allExpiring.length,
+    certs_expired_count:  expiredCerts.length,
     collaborators_with_expired,
-    // IT
+    // IT / RAG
     total_chunks:       totalChunksRes.count ?? 0,
     total_cache_entries: totalCacheRes.count ?? 0,
     docs_error_week:    docsErrorRes.count ?? 0,
@@ -281,6 +273,6 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
   }
 }
 
-function toCert(d: { colaborador: string | null; data_vencimento: string | null; tipo: string | null; file_name: string | null }): ExpiringCert {
-  return { colaborador: d.colaborador, data_vencimento: d.data_vencimento, tipo: d.tipo, file_name: d.file_name }
+function toCert(d: { employee_name: string | null; expiry_date: string | null; course_name: string | null; file_name: string | null }): ExpiringCert {
+  return { employee_name: d.employee_name, expiry_date: d.expiry_date, course_name: d.course_name, file_name: d.file_name }
 }

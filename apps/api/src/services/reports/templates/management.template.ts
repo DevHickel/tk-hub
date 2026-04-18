@@ -110,8 +110,8 @@ export function buildManagementEmail(
     <h3>📊 Produtividade</h3>
     <table>
       <tr><td>Consultas ao assistente IA</td><td>${metrics.rag_queries}</td></tr>
-      <tr><td>Certificados processados</td><td>${metrics.docs_processed}</td></tr>
-      <tr><td>Certificados recebidos por e-mail</td><td>${metrics.emails_processed}</td></tr>
+      <tr><td>Certificados cadastrados na semana</td><td>${metrics.certs_processed_week}</td></tr>
+      <tr><td>Documentos RAG indexados</td><td>${metrics.rag_docs_total}</td></tr>
       <tr><td>Usuários ativos na semana</td><td>${metrics.active_users}</td></tr>
     </table>
 
@@ -120,8 +120,8 @@ export function buildManagementEmail(
     <table>
       <tr><td>Total de certificados ativos</td><td>${metrics.total_certs}</td></tr>
       <tr><td>Novos na semana</td><td>${metrics.certs_processed_week}</td></tr>
-      <tr><td>Vencendo em até 30 dias</td><td style="color:${metrics.docs_expiring.length > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_expiring.length}</td></tr>
-      <tr><td>Vencidos</td><td style="color:${tiers.expired.length > 0 ? '#EF4444' : 'inherit'}">${tiers.expired.length}</td></tr>
+      <tr><td>Vencendo em até 30 dias</td><td style="color:${metrics.certs_expiring_count > 0 ? '#F59E0B' : 'inherit'}">${metrics.certs_expiring_count}</td></tr>
+      <tr><td>Vencidos</td><td style="color:${metrics.certs_expired_count > 0 ? '#EF4444' : 'inherit'}">${metrics.certs_expired_count}</td></tr>
     </table>
 
     <!-- Top tipos de certificado -->

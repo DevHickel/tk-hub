@@ -23,12 +23,12 @@ async function checkExpiringDocuments() {
   const em30 = addDays(hoje, 30)
 
   const { data: docs, error } = await supabase
-    .from('documents')
-    .select('id, file_name, colaborador, data_vencimento')
-    .eq('status', 'active')
-    .not('data_vencimento', 'is', null)
-    .gte('data_vencimento', hoje.toISOString().split('T')[0])
-    .lte('data_vencimento', em30.toISOString().split('T')[0])
+    .from('processed_certificates')
+    .select('id, file_name, employee_name, expiry_date')
+    .eq('status', 'approved')
+    .not('expiry_date', 'is', null)
+    .gte('expiry_date', hoje.toISOString().split('T')[0])
+    .lte('expiry_date', em30.toISOString().split('T')[0])
 
   if (error) {
     Sentry.captureException(error, { tags: { job: 'cron-expiry' } })
@@ -36,16 +36,16 @@ async function checkExpiringDocuments() {
   }
 
   for (const doc of docs ?? []) {
-    const dias = differenceInDays(new Date(doc.data_vencimento), hoje)
+    const dias = differenceInDays(new Date(doc.expiry_date), hoje)
 
     // Notifica em [30, 15, 7, 3, 1] dias + dia do vencimento
     if (![30, 15, 7, 3, 1, 0].includes(dias)) continue
 
     const adminEmails = await getAdminEmails()
     const html = getExpiryTemplate(
-      doc.file_name ?? 'Documento',
+      doc.file_name ?? 'Certificado',
       dias,
-      doc.colaborador ?? 'Colaborador'
+      doc.employee_name ?? 'Colaborador'
     )
 
     for (const email of adminEmails) {
