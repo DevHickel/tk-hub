@@ -127,7 +127,7 @@ export async function answerQuestion(
     })
 
     // 3b. Hybrid search boost — chunks que batem por keyword ganham +0.1
-    const { data: keywordHits } = await supabase.rpc(
+    const { data: keywordHits, error: hybridError } = await supabase.rpc(
       'hybrid_search' as never,
       {
         query_text: trimmed,
@@ -135,6 +135,9 @@ export async function answerQuestion(
         match_count: 10,
       } as never
     )
+    if (hybridError) {
+      safeLog('warn', 'hybrid_search RPC failed — skipping keyword boost', { error: hybridError.message })
+    }
     const keywordIds = new Set(
       ((keywordHits as Array<{ id: number }>) ?? []).map((h) => h.id)
     )
@@ -433,8 +436,7 @@ ${context}`
     }
 
     // Fallback: LLM não declarou TABLES_USED ou nenhum crop bateu.
-    // Só mostra página inteira do top chunk — NUNCA crops aleatórios, pois podem ser
-    // de tabelas irrelevantes que só ranquearam por conter o nome do equipamento.
+    // Prioriza página inteira; se page_image_path não existir, usa o primeiro table crop.
     if (sources.length === 0) {
       for (const chunk of ranked) {
         if (sources.length >= 2) break
@@ -444,9 +446,27 @@ ${context}`
         if (!fileName || !Number.isFinite(page)) continue
 
         const imagePath = chunk.metadata?.page_image_path as string | undefined
-        if (imagePath) pushSource(fileName, page, imagePath)
+        if (imagePath) {
+          pushSource(fileName, page, imagePath)
+        } else {
+          // page_image_path ausente — tentar usar primeiro crop de tabela disponível
+          const tables = (chunk.metadata?.page_tables as Array<{ label?: string; image_path?: string }> | undefined) ?? []
+          for (const t of tables) {
+            if (t?.image_path) {
+              pushSource(fileName, page, t.image_path, t.label)
+              break
+            }
+          }
+        }
       }
     }
+
+    safeLog('info', 'sources assembled', {
+      count: sources.length,
+      mode: usedLabels === null ? 'LLM_OMITTED' : usedLabels.size > 0 ? 'GUIDED' : 'FALLBACK',
+      topChunkHasPageImage: !!ranked[0]?.metadata?.page_image_path,
+      topChunkHasTables: ((ranked[0]?.metadata?.page_tables as unknown[]) ?? []).length,
+    })
 
     // 9. Salvar no chat_history — só IDs dos chunks que realmente passaram do filtro
     // (não os 10 brutos). Isso mantém o loop de feedback preciso.
