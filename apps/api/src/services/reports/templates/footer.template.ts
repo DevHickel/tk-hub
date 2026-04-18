@@ -94,9 +94,11 @@ function getITFooter(lang: 'pt' | 'en', settingsLink: string): string {
     <div style="${FOOTER_STYLE}">
       <p><strong>About this report:</strong></p>
       <p>
-        • <strong>Cache hit rate:</strong> percentage of queries answered using cached embeddings instead of calling the OpenAI API. Target: ≥ 60%.<br>
-        • <strong>AI cost:</strong> estimated cost based on token usage per model (prices may vary).<br>
-        • <strong>Model distribution:</strong> proportion of queries handled by each model (gpt-4o-mini is cheaper).
+        • <strong>AI cost:</strong> estimated based on token consumption per model. Prices are averages (input+output) and may vary.<br>
+        • <strong>Cache hit rate:</strong> percentage of queries answered from cached embeddings instead of OpenAI API calls. Target: ≥ 60%.<br>
+        • <strong>Success rate:</strong> processed documents vs. errors — values below 95% indicate pipeline issues.<br>
+        • <strong>Satisfaction:</strong> ratio of positive (👍) to negative (👎) feedback on AI responses.<br>
+        • <strong>Stuck documents:</strong> documents with status "processing" for too long may indicate queue issues.
       </p>
       <p>
         • Settings and recipients can be configured at ${settingsLink}.
@@ -107,9 +109,11 @@ function getITFooter(lang: 'pt' | 'en', settingsLink: string): string {
     <div style="${FOOTER_STYLE}">
       <p><strong>Sobre este relatório:</strong></p>
       <p>
+        • <strong>Custo de IA:</strong> estimativa baseada no consumo de tokens por modelo. Preços são médias (input+output) e podem variar.<br>
         • <strong>Taxa de cache:</strong> percentual de consultas respondidas usando embeddings em cache em vez de chamar a API da OpenAI. Meta: ≥ 60%.<br>
-        • <strong>Custo de IA:</strong> estimativa baseada no consumo de tokens por modelo (preços podem variar).<br>
-        • <strong>Distribuição de modelos:</strong> proporção de consultas atendidas por cada modelo (gpt-4o-mini é mais econômico).
+        • <strong>Taxa de sucesso:</strong> documentos processados vs. erros — valores abaixo de 95% indicam problemas no pipeline.<br>
+        • <strong>Satisfação:</strong> proporção de feedbacks positivos (👍) vs. negativos (👎) nas respostas da IA.<br>
+        • <strong>Documentos travados:</strong> documentos com status "processando" por muito tempo podem indicar problemas na fila.
       </p>
       <p>
         • Configurações e destinatários podem ser ajustados em ${settingsLink}.

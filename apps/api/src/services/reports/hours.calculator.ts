@@ -48,6 +48,17 @@ export interface WeekMetrics {
     day30: ExpiringCert[]
   }
   collaborators_with_expired: Array<{ colaborador: string; count: number }>
+  // IT-specific
+  total_chunks: number
+  total_cache_entries: number
+  docs_error_week: number
+  docs_processing: number
+  active_users: number
+  top_users: Array<{ user_id: string; name: string; queries: number }>
+  feedback_positive: number
+  feedback_negative: number
+  avg_tokens_per_query: number
+  total_tokens_week: number
 }
 
 export interface HoursSaved {
