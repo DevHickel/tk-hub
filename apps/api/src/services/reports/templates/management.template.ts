@@ -13,7 +13,7 @@ export function buildManagementEmail(
   const lang = (config.language ?? 'pt') as 'pt' | 'en'
   const locale = lang === 'en' ? enUS : ptBR
   const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
-  const footer = getFooterExplanations(config, lang)
+  const footer = getFooterExplanations(config, lang, 'management')
 
   return `<!DOCTYPE html>
 <html lang="${lang}">

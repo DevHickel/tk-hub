@@ -11,7 +11,7 @@ export function buildITEmail(
   weekEnd: Date
 ): string {
   const lang = (config.language ?? 'pt') as 'pt' | 'en'
-  const footer = getFooterExplanations(config, lang)
+  const footer = getFooterExplanations(config, lang, 'it')
   const period = `${format(weekStart, 'dd/MM', { locale: ptBR })} a ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`
 
   const totalTokens = metrics.model_usage.reduce((s, r) => s + (r.tokens_used ?? 0), 0)

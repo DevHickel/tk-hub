@@ -5,7 +5,7 @@ import { ptBR } from 'date-fns/locale'
 
 export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekStart: Date, weekEnd: Date): string {
   const lang = (config.language ?? 'pt') as 'pt' | 'en'
-  const footer = getFooterExplanations(config, lang)
+  const footer = getFooterExplanations(config, lang, 'hr')
   const period = `${format(weekStart, 'dd/MM', { locale: ptBR })} a ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`
 
   // Agrupar por prazo
@@ -69,7 +69,7 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
     <h3>Resumo da semana</h3>
     <table>
       <tr><td style="padding:8px;font-size:14px">Documentos processados</td><td style="padding:8px;font-size:14px;text-align:right;font-weight:600">${metrics.docs_processed}</td></tr>
-      <tr><td style="padding:8px;font-size:14px;background:#f8fafc">Emails com anexo processados</td><td style="padding:8px;font-size:14px;text-align:right;font-weight:600;background:#f8fafc">${metrics.emails_processed}</td></tr>
+      <tr><td style="padding:8px;font-size:14px;background:#f8fafc">Certificados recebidos por e-mail</td><td style="padding:8px;font-size:14px;text-align:right;font-weight:600;background:#f8fafc">${metrics.emails_processed}</td></tr>
     </table>
   </div>
   <div class="ft">${footer}</div>
