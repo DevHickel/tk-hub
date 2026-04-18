@@ -40,6 +40,7 @@ const configSchema = z.object({
   benchmark_email_triage_min:z.number().int().min(1).max(60).optional(),
   send_day:                 z.number().int().min(0).max(6).optional(),
   send_hour:                z.number().int().min(0).max(23).optional(),
+  monthly_fixed_cost_brl:   z.number().min(0).max(100000).optional(),
 })
 
 reportsRoutes.put('/reports/config', zValidator('json', configSchema), async (c) => {
