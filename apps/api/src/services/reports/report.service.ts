@@ -62,7 +62,7 @@ export async function generateAndSendReports(weekStart: Date, weekEnd: Date) {
       const subject = getReportSubject(type, weekStart, lang)
 
       if (type === 'management') {
-        html = buildManagementEmail(metrics, config, hoursSaved, weekStart, weekEnd)
+        html = buildManagementEmail(metrics, config, hoursSaved, aiCost, weekStart, weekEnd)
       } else if (type === 'hr') {
         html = buildHREmail(metrics, config, weekStart, weekEnd)
       } else {
