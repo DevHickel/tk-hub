@@ -416,20 +416,18 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
     queryFn: () => api.getReportConfig(),
   })
 
-  const [language, setLanguage] = useState<'pt' | 'en'>('pt')
   const [sendDay, setSendDay] = useState(0)
   const [sendHour, setSendHour] = useState(0)
 
   useEffect(() => {
     if (remote) {
-      if (remote.language) setLanguage(remote.language as 'pt' | 'en')
       setSendDay(remote.send_day ?? 0)
       setSendHour(remote.send_hour ?? 0)
     }
   }, [remote])
 
   const savePrefsMutation = useMutation({
-    mutationFn: () => api.updateReportConfig({ language, send_day: sendDay, send_hour: sendHour }),
+    mutationFn: () => api.updateReportConfig({ send_day: sendDay, send_hour: sendHour }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['report-config'] })
       toast({ title: 'Preferências salvas' })
@@ -493,22 +491,6 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Idioma dos relatórios</Label>
-            <Select
-              value={language}
-              onValueChange={(v) => setLanguage(v as 'pt' | 'en')}
-              disabled={!canEdit}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pt">Português (BR)</SelectItem>
-                <SelectItem value="en">English</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
           {canEdit && (
             <Button

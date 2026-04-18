@@ -49,10 +49,11 @@ reportsRoutes.put('/reports/config', zValidator('json', configSchema), async (c)
 
   const body = c.req.valid('json')
   try {
-    // Upsert — tabela tem apenas 1 linha
+    // Update a única linha (singleton via unique index)
     const { error } = await supabase
       .from('report_config')
-      .upsert({ ...body, updated_at: new Date().toISOString() })
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .not('id', 'is', null)
     if (error) throw error
     return c.json({ success: true })
   } catch (error) {
