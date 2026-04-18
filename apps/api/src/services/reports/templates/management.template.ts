@@ -49,7 +49,7 @@ export function buildManagementEmail(
     <table class="metrics">
       <tr><td>${lang === 'en' ? 'AI queries' : 'Consultas ao assistente IA'}</td><td>${metrics.rag_queries}</td></tr>
       <tr><td>${lang === 'en' ? 'Documents processed' : 'Documentos processados'}</td><td>${metrics.docs_processed}</td></tr>
-      <tr><td>${lang === 'en' ? 'Emails processed (DMS)' : 'Emails processados (DMS)'}</td><td>${metrics.emails_processed}</td></tr>
+      <tr><td>${lang === 'en' ? 'Certificates received by email' : 'Certificados recebidos por e-mail'}</td><td>${metrics.emails_processed}</td></tr>
       <tr><td>${lang === 'en' ? 'Documents expiring in 30 days' : 'Documentos vencendo em 30 dias'}</td><td style="color:${metrics.docs_expiring.length > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_expiring.length}</td></tr>
       <tr><td>${lang === 'en' ? 'Overdue documents' : 'Documentos vencidos'}</td><td style="color:${metrics.docs_expired > 0 ? '#EF4444' : 'inherit'}">${metrics.docs_expired}</td></tr>
     </table>

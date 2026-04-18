@@ -73,8 +73,8 @@ export function buildITEmail(
     <table>
       <tr><td>Consultas ao assistente</td><td>${metrics.rag_queries}</td></tr>
       <tr><td>Documentos processados</td><td>${metrics.docs_processed}</td></tr>
-      <tr><td>Emails processados</td><td>${metrics.emails_processed}</td></tr>
-      <tr><td>Embeddings do cache</td><td>${cacheHits}</td></tr>
+      <tr><td>Certificados recebidos por e-mail</td><td>${metrics.emails_processed}</td></tr>
+      <tr><td>Consultas atendidas pelo cache</td><td>${cacheHits}</td></tr>
     </table>
   </div>
   <div class="ft">${footer}</div>

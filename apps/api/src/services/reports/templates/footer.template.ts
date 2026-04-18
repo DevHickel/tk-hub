@@ -23,7 +23,7 @@ export function getFooterExplanations(config: ReportConfig, lang: 'pt' | 'en' = 
       </p>
       <p>
         • <strong>Estimated value:</strong> hours saved × R$${b.cost}/hour (average cost configured).<br>
-        • These benchmarks can be adjusted at <a href="${frontendUrl}/settings/reports">Settings → Reports</a>.
+        • These benchmarks can be adjusted at <a href="${frontendUrl}/report-settings">Settings → Reports</a>.
       </p>
     </div>`
 
@@ -38,7 +38,7 @@ export function getFooterExplanations(config: ReportConfig, lang: 'pt' | 'en' = 
       </p>
       <p>
         • <strong>Valor estimado:</strong> horas economizadas × R$${b.cost}/hora (custo médio configurado).<br>
-        • Esses benchmarks podem ser ajustados em <a href="${frontendUrl}/settings/reports">Configurações → Relatórios</a>.
+        • Esses benchmarks podem ser ajustados em <a href="${frontendUrl}/report-settings">Configurações → Relatórios</a>.
       </p>
     </div>`
 }
