@@ -44,8 +44,10 @@ export function useSidebarCollapsed(animateOnMount = false) {
     localStorage.setItem(STORAGE_KEY, 'true')
   }, [])
 
-  // Marca colapso pendente — a animação roda na página de destino
+  // Marca colapso pendente — a animação roda na página de destino.
+  // Se já está colapsado, não agenda (evita animação desnecessária).
   const schedulePendingCollapse = useCallback(() => {
+    if (localStorage.getItem(STORAGE_KEY) === 'true') return
     localStorage.setItem(PENDING_KEY, 'true')
     localStorage.setItem(STORAGE_KEY, 'true')
   }, [])

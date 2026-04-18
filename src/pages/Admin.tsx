@@ -401,14 +401,6 @@ export default function Admin() {
     user.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-background">
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
@@ -423,6 +415,11 @@ export default function Admin() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
         <Tabs defaultValue="users" className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="users" className="flex items-center gap-2">
@@ -681,6 +678,7 @@ export default function Admin() {
 
 
         </Tabs>
+        )}
         </main>
       </div>
 
