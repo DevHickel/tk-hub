@@ -1,12 +1,13 @@
 import type { WeekMetrics, ReportConfig, ExpiringCert } from '../hours.calculator.js'
 import { getFooterExplanations } from './footer.template.js'
 import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { ptBR, enUS } from 'date-fns/locale'
 
 export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekStart: Date, weekEnd: Date): string {
   const lang = (config.language ?? 'pt') as 'pt' | 'en'
+  const locale = lang === 'en' ? enUS : ptBR
   const footer = getFooterExplanations(config, lang, 'hr')
-  const period = `${format(weekStart, 'dd/MM', { locale: ptBR })} a ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`
+  const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
 
   const tiers = metrics.certs_expiring_tiers
   const totalUrgent = tiers.expired.length + tiers.day1.length + tiers.day3.length + tiers.day7.length
@@ -62,11 +63,11 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
   <div style="border-bottom:1px solid #e5e7eb">
     <table style="border:none"><tr>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
-        <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.total_certs}</div>
+        <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.total_certs.toLocaleString('pt-BR')}</div>
         <div style="font-size:11px;color:#64748B;margin-top:4px">Total de certificados</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
-        <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.certs_processed_week}</div>
+        <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.certs_processed_week.toLocaleString('pt-BR')}</div>
         <div style="font-size:11px;color:#64748B;margin-top:4px">Novos na semana</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
@@ -153,11 +154,11 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
     <table>
       <tr>
         <td>Certificados processados</td>
-        <td style="text-align:right;font-weight:600">${metrics.certs_processed_week}</td>
+        <td style="text-align:right;font-weight:600">${metrics.certs_processed_week.toLocaleString('pt-BR')}</td>
       </tr>
       <tr>
         <td>Certificados recebidos por e-mail</td>
-        <td style="text-align:right;font-weight:600">${metrics.emails_processed}</td>
+        <td style="text-align:right;font-weight:600">${metrics.emails_processed.toLocaleString('pt-BR')}</td>
       </tr>
       <tr>
         <td>Alertas de vencimento configurados</td>

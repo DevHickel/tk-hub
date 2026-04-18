@@ -1,7 +1,7 @@
 import type { WeekMetrics, ReportConfig, AICost } from '../hours.calculator.js'
 import { getFooterExplanations } from './footer.template.js'
 import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { ptBR, enUS } from 'date-fns/locale'
 
 export function buildITEmail(
   metrics: WeekMetrics,
@@ -11,8 +11,9 @@ export function buildITEmail(
   weekEnd: Date
 ): string {
   const lang = (config.language ?? 'pt') as 'pt' | 'en'
+  const locale = lang === 'en' ? enUS : ptBR
   const footer = getFooterExplanations(config, lang, 'it')
-  const period = `${format(weekStart, 'dd/MM', { locale: ptBR })} a ${format(weekEnd, 'dd/MM/yyyy', { locale: ptBR })}`
+  const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
 
   const totalTokens = metrics.total_tokens_week
   const miniTokens = metrics.model_usage

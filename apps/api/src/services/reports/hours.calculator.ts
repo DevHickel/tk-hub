@@ -71,14 +71,12 @@ export function calcHoursSaved(metrics: WeekMetrics, config: ReportConfig): Hour
   const b = {
     search:      config.benchmark_search_min      ?? DEFAULT_BENCHMARKS.search_min,
     doc_process: config.benchmark_doc_process_min ?? DEFAULT_BENCHMARKS.doc_process_min,
-    alert:       config.benchmark_alert_min       ?? DEFAULT_BENCHMARKS.alert_min,
     email:       config.benchmark_email_triage_min ?? DEFAULT_BENCHMARKS.email_triage_min,
   }
 
   const minutesSaved =
     metrics.rag_queries      * b.search +
     metrics.docs_processed   * b.doc_process +
-    metrics.alerts_sent      * b.alert +
     metrics.emails_processed * b.email
 
   const hoursSaved = minutesSaved / 60

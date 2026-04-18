@@ -59,7 +59,7 @@ export function buildManagementEmail(
   <!-- Hero: economia -->
   <div class="hero">
     <div class="num">${formatHoursMinutes(hoursSaved.minutesSaved)}</div>
-    <div class="label">Tempo economizado na semana (${hoursSaved.minutesSaved.toLocaleString('pt-BR')} minutos)</div>
+    <div class="label">Tempo economizado na semana (${hoursSaved.minutesSaved.toLocaleString('pt-BR')} min)</div>
     <div class="sub">≈ R$ ${formatBRL(hoursSaved.valueBRL)}</div>
   </div>
 
@@ -104,7 +104,7 @@ export function buildManagementEmail(
     <h3>📊 Produtividade</h3>
     <table>
       <tr><td>Consultas ao assistente IA</td><td>${metrics.rag_queries}</td></tr>
-      <tr><td>Documentos processados</td><td>${metrics.docs_processed}</td></tr>
+      <tr><td>Certificados processados</td><td>${metrics.docs_processed}</td></tr>
       <tr><td>Certificados recebidos por e-mail</td><td>${metrics.emails_processed}</td></tr>
       <tr><td>Usuários ativos na semana</td><td>${metrics.active_users}</td></tr>
     </table>
@@ -153,5 +153,5 @@ function formatBRL(n: number): string {
 function formatHoursMinutes(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60)
   const m = Math.round(totalMinutes % 60)
-  return `${h}h${String(m).padStart(2, '0')}m`
+  return `${h} horas e ${m} minutos`
 }
