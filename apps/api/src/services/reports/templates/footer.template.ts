@@ -35,6 +35,7 @@ function getManagementFooter(config: ReportConfig, lang: 'pt' | 'en', settingsLi
       </p>
       <p>
         • <strong>Estimated value:</strong> hours saved × R$${b.cost}/hour (average cost configured).<br>
+        • <strong>ROI:</strong> estimated value ÷ total weekly cost (AI tokens + fixed infrastructure cost ÷ 4.33).<br>
         • These benchmarks can be adjusted at ${settingsLink}.
       </p>
     </div>`
@@ -49,6 +50,7 @@ function getManagementFooter(config: ReportConfig, lang: 'pt' | 'en', settingsLi
       </p>
       <p>
         • <strong>Valor estimado:</strong> horas economizadas × R$${b.cost}/hora (custo médio configurado).<br>
+        • <strong>ROI:</strong> valor economizado ÷ custo total semanal (tokens IA + custo fixo de infraestrutura ÷ 4,33).<br>
         • Esses benchmarks podem ser ajustados em ${settingsLink}.
       </p>
     </div>`

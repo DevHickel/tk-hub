@@ -17,6 +17,7 @@ export interface ReportConfig {
   benchmark_email_triage_min?: number
   send_day?: number   // 0=domingo ... 6=sábado
   send_hour?: number  // 0-23 (BRT)
+  monthly_fixed_cost_brl?: number  // custo fixo mensal de infra (VPS, domínio, etc)
 }
 
 export interface ExpiringCert {

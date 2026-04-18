@@ -16,9 +16,13 @@ export function buildManagementEmail(
   const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
   const footer = getFooterExplanations(config, lang, 'management')
 
-  // ROI: economia vs custo de IA
-  const roi = aiCost.totalBRL > 0
-    ? Math.round((hoursSaved.valueBRL / aiCost.totalBRL) * 100) / 100
+  // Custos: IA + infraestrutura
+  const weeklyFixedCost = (config.monthly_fixed_cost_brl ?? 0) / 4.33
+  const totalWeeklyCost = aiCost.totalBRL + weeklyFixedCost
+
+  // ROI: economia vs custo total
+  const roi = totalWeeklyCost > 0
+    ? Math.round((hoursSaved.valueBRL / totalWeeklyCost) * 100) / 100
     : 0
   const roiColor = roi >= 5 ? '#22C55E' : roi >= 2 ? '#F59E0B' : '#EF4444'
 
@@ -97,6 +101,8 @@ export function buildManagementEmail(
       <tr><td>Tempo economizado</td><td>${formatHoursMinutes(hoursSaved.minutesSaved)}</td></tr>
       <tr><td>Valor economizado</td><td style="color:#22C55E">R$ ${formatBRL(hoursSaved.valueBRL)}</td></tr>
       <tr><td>Custo de IA na semana</td><td>R$ ${formatBRL(aiCost.totalBRL)}</td></tr>
+      ${weeklyFixedCost > 0 ? `<tr><td>Custo fixo semanal (infra)</td><td>R$ ${formatBRL(weeklyFixedCost)}</td></tr>` : ''}
+      <tr><td><strong>Custo total semanal</strong></td><td><strong>R$ ${formatBRL(totalWeeklyCost)}</strong></td></tr>
       <tr><td>Retorno sobre investimento (ROI)</td><td style="color:${roiColor}">${roi > 0 ? roi.toFixed(1) + 'x' : '—'}</td></tr>
     </table>
 

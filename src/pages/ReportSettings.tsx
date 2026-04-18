@@ -40,6 +40,7 @@ import {
   Monitor,
   ShieldCheck,
   Mails,
+  Server,
 } from 'lucide-react'
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
@@ -66,6 +67,7 @@ const DEFAULTS: Required<Omit<ReportConfig, 'id' | 'updated_at'>> = {
   benchmark_email_triage_min: 10,
   send_day: 0,
   send_hour: 0,
+  monthly_fixed_cost_brl: 0,
 }
 
 function calcPreview(cfg: typeof DEFAULTS) {
@@ -292,6 +294,7 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
         benchmark_email_triage_min: remote.benchmark_email_triage_min ?? DEFAULTS.benchmark_email_triage_min,
         send_day: remote.send_day ?? DEFAULTS.send_day,
         send_hour: remote.send_hour ?? DEFAULTS.send_hour,
+        monthly_fixed_cost_brl: remote.monthly_fixed_cost_brl ?? DEFAULTS.monthly_fixed_cost_brl,
       })
     }
   }, [remote])
@@ -354,6 +357,26 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
             {field('Ler e classificar um e-mail com anexo', 'benchmark_email_triage_min', 'min', <Mail className="h-3.5 w-3.5 text-purple-500" />)}
             <div className="space-y-1.5 pt-2 border-t">
               {field('Valor médio da hora de trabalho', 'hour_cost_brl', 'R$', <BarChart3 className="h-3.5 w-3.5 text-rose-500" />, 1, 1000)}
+            </div>
+            <div className="space-y-1.5 pt-2 border-t">
+              <Label className="flex items-center gap-1.5">
+                <Server className="h-3.5 w-3.5 text-slate-500" />
+                Custo fixo mensal de infraestrutura
+                <span className="text-muted-foreground font-normal">(R$)</span>
+              </Label>
+              <Input
+                type="number"
+                min={0}
+                max={100000}
+                step={0.01}
+                value={cfg.monthly_fixed_cost_brl}
+                onChange={(e) => setCfg((c) => ({ ...c, monthly_fixed_cost_brl: Number(e.target.value) }))}
+                disabled={!canEdit}
+                className="w-40"
+              />
+              <p className="text-xs text-muted-foreground">
+                Soma de todos os custos fixos: VPS, domínio, licenças, agência de IA, etc. Será dividido por 4,33 para calcular o custo semanal no ROI.
+              </p>
             </div>
             {canEdit && (
               <Button
