@@ -37,6 +37,8 @@ const configSchema = z.object({
   benchmark_doc_process_min:z.number().int().min(1).max(120).optional(),
   benchmark_alert_min:      z.number().int().min(1).max(60).optional(),
   benchmark_email_triage_min:z.number().int().min(1).max(60).optional(),
+  send_day:                 z.number().int().min(0).max(6).optional(),
+  send_hour:                z.number().int().min(0).max(23).optional(),
 })
 
 reportsRoutes.put('/reports/config', zValidator('json', configSchema), async (c) => {

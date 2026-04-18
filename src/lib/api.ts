@@ -75,6 +75,8 @@ export interface ReportConfig {
   benchmark_doc_process_min?: number
   benchmark_alert_min?: number
   benchmark_email_triage_min?: number
+  send_day?: number   // 0=domingo ... 6=sábado
+  send_hour?: number  // 0-23 (BRT)
   updated_at?: string
 }
 

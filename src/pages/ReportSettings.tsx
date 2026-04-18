@@ -30,7 +30,6 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Settings,
   Users,
-  Sliders,
   Trash2,
   Plus,
   Send,
@@ -39,6 +38,10 @@ import {
   Mail,
   BarChart3,
   FileText,
+  Timer,
+  Monitor,
+  ShieldCheck,
+  Mails,
 } from 'lucide-react'
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
@@ -63,6 +66,8 @@ const DEFAULTS: Required<Omit<ReportConfig, 'id' | 'updated_at'>> = {
   benchmark_doc_process_min: 25,
   benchmark_alert_min: 5,
   benchmark_email_triage_min: 10,
+  send_day: 0,
+  send_hour: 0,
 }
 
 function calcPreview(cfg: typeof DEFAULTS) {
@@ -112,6 +117,38 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
 
   return (
     <div className="space-y-4">
+      {/* Explicação dos tipos de relatório */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-lg border bg-card p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <BarChart3 className="h-4 w-4 text-blue-500" />
+            Gestão
+          </div>
+          <p className="text-xs text-muted-foreground">ROI e produtividade: horas e reais economizados, volume de buscas e documentos.</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <ShieldCheck className="h-4 w-4 text-green-500" />
+            RH
+          </div>
+          <p className="text-xs text-muted-foreground">Certificações: alertas de vencimento urgentes e próximos, documentos expirados.</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Monitor className="h-4 w-4 text-purple-500" />
+            TI
+          </div>
+          <p className="text-xs text-muted-foreground">Infraestrutura IA: custo de tokens por modelo, taxa de cache, consumo total.</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Mails className="h-4 w-4 text-amber-500" />
+            Todos
+          </div>
+          <p className="text-xs text-muted-foreground">Recebe os 3 relatórios acima em um único envio semanal.</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
@@ -255,6 +292,8 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
         benchmark_doc_process_min: remote.benchmark_doc_process_min ?? DEFAULTS.benchmark_doc_process_min,
         benchmark_alert_min: remote.benchmark_alert_min ?? DEFAULTS.benchmark_alert_min,
         benchmark_email_triage_min: remote.benchmark_email_triage_min ?? DEFAULTS.benchmark_email_triage_min,
+        send_day: remote.send_day ?? DEFAULTS.send_day,
+        send_hour: remote.send_hour ?? DEFAULTS.send_hour,
       })
     }
   }, [remote])
@@ -303,20 +342,20 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Sliders className="h-4 w-4" />
-              Tempo manual estimado por ação
+              <Timer className="h-4 w-4" />
+              Quanto tempo leva sem a IA?
             </CardTitle>
             <CardDescription className="text-xs">
-              Minutos que um colaborador levaria para executar cada ação sem a IA.
+              Estimativa de quanto tempo cada tarefa levaria se feita manualmente, sem o TKzinho.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {field('Busca de informação', 'benchmark_search_min', 'min', <Search className="h-3.5 w-3.5 text-blue-500" />)}
-            {field('Catalogar documento', 'benchmark_doc_process_min', 'min', <FileText className="h-3.5 w-3.5 text-green-500" />, 1, 120)}
-            {field('Enviar alerta', 'benchmark_alert_min', 'min', <Clock className="h-3.5 w-3.5 text-amber-500" />)}
-            {field('Triar e-mail com anexo', 'benchmark_email_triage_min', 'min', <Mail className="h-3.5 w-3.5 text-purple-500" />)}
+            {field('Consultar um documento técnico', 'benchmark_search_min', 'min', <Search className="h-3.5 w-3.5 text-blue-500" />)}
+            {field('Processar e arquivar um documento', 'benchmark_doc_process_min', 'min', <FileText className="h-3.5 w-3.5 text-green-500" />, 1, 120)}
+            {field('Verificar e enviar um alerta de vencimento', 'benchmark_alert_min', 'min', <Clock className="h-3.5 w-3.5 text-amber-500" />)}
+            {field('Ler e classificar um e-mail com anexo', 'benchmark_email_triage_min', 'min', <Mail className="h-3.5 w-3.5 text-purple-500" />)}
             <div className="space-y-1.5 pt-2 border-t">
-              {field('Custo-hora colaborador', 'hour_cost_brl', 'R$', <BarChart3 className="h-3.5 w-3.5 text-rose-500" />, 1, 1000)}
+              {field('Valor médio da hora de trabalho', 'hour_cost_brl', 'R$', <BarChart3 className="h-3.5 w-3.5 text-rose-500" />, 1, 1000)}
             </div>
             {canEdit && (
               <Button
@@ -335,10 +374,10 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
-              Preview semanal (exemplo)
+              Simulação de economia semanal
             </CardTitle>
             <CardDescription className="text-xs">
-              Simulação com 50 buscas, 20 documentos, 10 alertas, 15 e-mails.
+              Com base em 50 consultas, 20 documentos, 10 alertas e 15 e-mails por semana:
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -366,6 +405,8 @@ function BenchmarksTab({ canEdit }: { canEdit: boolean }) {
 }
 
 // ── Tab 3: Preferências ──────────────────────────────────────────────────────
+const DAY_LABELS = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+
 function PreferencesTab({ canEdit }: { canEdit: boolean }) {
   const qc = useQueryClient()
   const { toast } = useToast()
@@ -376,13 +417,19 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
   })
 
   const [language, setLanguage] = useState<'pt' | 'en'>('pt')
+  const [sendDay, setSendDay] = useState(0)
+  const [sendHour, setSendHour] = useState(0)
 
   useEffect(() => {
-    if (remote?.language) setLanguage(remote.language as 'pt' | 'en')
+    if (remote) {
+      if (remote.language) setLanguage(remote.language as 'pt' | 'en')
+      setSendDay(remote.send_day ?? 0)
+      setSendHour(remote.send_hour ?? 0)
+    }
   }, [remote])
 
-  const saveLangMutation = useMutation({
-    mutationFn: () => api.updateReportConfig({ language }),
+  const savePrefsMutation = useMutation({
+    mutationFn: () => api.updateReportConfig({ language, send_day: sendDay, send_hour: sendHour }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['report-config'] })
       toast({ title: 'Preferências salvas' })
@@ -400,28 +447,76 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
     <div className="space-y-6 max-w-xl">
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Idioma dos relatórios</CardTitle>
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Agendamento automático
+          </CardTitle>
           <CardDescription className="text-xs">
-            Idioma usado nos assuntos e templates dos e-mails.
+            Os relatórios semanais são enviados automaticamente no dia e horário escolhidos (horário de Brasília).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select
-            value={language}
-            onValueChange={(v) => setLanguage(v as 'pt' | 'en')}
-            disabled={!canEdit}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pt">Português (BR)</SelectItem>
-              <SelectItem value="en">English</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap gap-4">
+            <div className="space-y-1.5">
+              <Label>Dia da semana</Label>
+              <Select
+                value={String(sendDay)}
+                onValueChange={(v) => setSendDay(Number(v))}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DAY_LABELS.map((label, i) => (
+                    <SelectItem key={i} value={String(i)}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Horário</Label>
+              <Select
+                value={String(sendHour)}
+                onValueChange={(v) => setSendHour(Number(v))}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <SelectItem key={i} value={String(i)}>
+                      {String(i).padStart(2, '0')}:00
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Idioma dos relatórios</Label>
+            <Select
+              value={language}
+              onValueChange={(v) => setLanguage(v as 'pt' | 'en')}
+              disabled={!canEdit}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pt">Português (BR)</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {canEdit && (
-            <Button size="sm" onClick={() => saveLangMutation.mutate()} disabled={saveLangMutation.isPending}>
-              {saveLangMutation.isPending ? 'Salvando...' : 'Salvar'}
+            <Button
+              size="sm"
+              onClick={() => savePrefsMutation.mutate()}
+              disabled={savePrefsMutation.isPending}
+            >
+              {savePrefsMutation.isPending ? 'Salvando...' : 'Salvar preferências'}
             </Button>
           )}
         </CardContent>
@@ -452,19 +547,6 @@ function PreferencesTab({ canEdit }: { canEdit: boolean }) {
               Apenas administradores e gestores podem enviar relatórios de teste.
             </p>
           )}
-        </CardContent>
-      </Card>
-
-      <Card className="bg-muted/40">
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Agendamento automático
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>Os relatórios são enviados automaticamente todo <strong>domingo às 00:00</strong> (horário de Brasília).</p>
-          <p>Não é necessário nenhuma ação manual.</p>
         </CardContent>
       </Card>
     </div>
@@ -500,8 +582,8 @@ export default function ReportSettings() {
                 Destinatários
               </TabsTrigger>
               <TabsTrigger value="benchmarks" className="flex items-center gap-1.5">
-                <Sliders className="h-3.5 w-3.5" />
-                Benchmarks
+                <Timer className="h-3.5 w-3.5" />
+                Economia de tempo
               </TabsTrigger>
               <TabsTrigger value="preferences" className="flex items-center gap-1.5">
                 <Settings className="h-3.5 w-3.5" />
