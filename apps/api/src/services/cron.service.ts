@@ -38,8 +38,8 @@ async function checkExpiringDocuments() {
   for (const doc of docs ?? []) {
     const dias = differenceInDays(new Date(doc.data_vencimento), hoje)
 
-    // Só notifica em [30, 15, 7, 1] dias (dms/SKILL.md)
-    if (![30, 15, 7, 1].includes(dias)) continue
+    // Notifica em [30, 15, 7, 3, 1] dias + dia do vencimento
+    if (![30, 15, 7, 3, 1, 0].includes(dias)) continue
 
     const adminEmails = await getAdminEmails()
     const html = getExpiryTemplate(
@@ -52,7 +52,9 @@ async function checkExpiringDocuments() {
       try {
         await sendEmail(
           email,
-          `⚠️ Documento vence em ${dias} dia${dias > 1 ? 's' : ''}: ${doc.file_name}`,
+          dias === 0
+            ? `🔴 Certificado vence HOJE: ${doc.file_name}`
+            : `⚠️ Certificado vence em ${dias} dia${dias > 1 ? 's' : ''}: ${doc.file_name}`,
           html
         )
       } catch (err) {

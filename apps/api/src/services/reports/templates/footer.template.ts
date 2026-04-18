@@ -62,12 +62,13 @@ function getHRFooter(lang: 'pt' | 'en', settingsLink: string): string {
     <div style="${FOOTER_STYLE}">
       <p><strong>About this report:</strong></p>
       <p>
-        • <strong>Urgent (7 days):</strong> documents expiring within the next 7 days — requires immediate action.<br>
-        • <strong>Upcoming (8–30 days):</strong> documents expiring in 8 to 30 days — plan renewal in advance.<br>
-        • <strong>Overdue:</strong> documents past their expiry date — contact the responsible person.
+        • <strong>🔴 Expired / 1 day:</strong> certificates already expired or expiring tomorrow — immediate action required.<br>
+        • <strong>🟠 2–3 days:</strong> certificates expiring very soon — prioritize renewal.<br>
+        • <strong>🟡 4–15 days:</strong> certificates requiring attention — schedule renewal.<br>
+        • <strong>🔵 16–30 days:</strong> certificates approaching expiry — plan ahead.
       </p>
       <p>
-        • Alerts are sent automatically when a document approaches its expiry date.<br>
+        • Automatic alerts are sent at 30, 15, 7, 3 and 1 day before expiry, and on the day it expires.<br>
         • Recipients and schedule can be configured at ${settingsLink}.
       </p>
     </div>`
@@ -76,12 +77,13 @@ function getHRFooter(lang: 'pt' | 'en', settingsLink: string): string {
     <div style="${FOOTER_STYLE}">
       <p><strong>Sobre este relatório:</strong></p>
       <p>
-        • <strong>Urgente (7 dias):</strong> documentos vencendo nos próximos 7 dias — requer ação imediata.<br>
-        • <strong>Próximos (8–30 dias):</strong> documentos vencendo em 8 a 30 dias — planeje a renovação com antecedência.<br>
-        • <strong>Vencidos:</strong> documentos com validade expirada — entre em contato com o responsável.
+        • <strong>🔴 Vencido / 1 dia:</strong> certificados já vencidos ou que vencem amanhã — ação imediata necessária.<br>
+        • <strong>🟠 2–3 dias:</strong> certificados vencendo muito em breve — priorize a renovação.<br>
+        • <strong>🟡 4–15 dias:</strong> certificados que precisam de atenção — agende a renovação.<br>
+        • <strong>🔵 16–30 dias:</strong> certificados se aproximando do vencimento — planeje com antecedência.
       </p>
       <p>
-        • Alertas são enviados automaticamente quando um documento se aproxima do vencimento.<br>
+        • Alertas automáticos são enviados 30, 15, 7, 3 e 1 dia antes do vencimento, e no dia em que vence.<br>
         • Destinatários e agendamento podem ser configurados em ${settingsLink}.
       </p>
     </div>`

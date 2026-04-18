@@ -19,6 +19,13 @@ export interface ReportConfig {
   send_hour?: number  // 0-23 (BRT)
 }
 
+export interface ExpiringCert {
+  colaborador: string | null
+  data_vencimento: string | null
+  tipo: string | null
+  file_name: string | null
+}
+
 export interface WeekMetrics {
   rag_queries: number
   docs_processed: number
@@ -28,6 +35,19 @@ export interface WeekMetrics {
   cache_hits: number
   docs_expiring: Array<{ colaborador: string | null; data_vencimento: string | null }>
   docs_expired: number
+  // HR-specific
+  total_certs: number
+  certs_processed_week: number
+  certs_by_type: Array<{ tipo: string; count: number }>
+  certs_expiring_tiers: {
+    expired: ExpiringCert[]
+    day1: ExpiringCert[]
+    day3: ExpiringCert[]
+    day7: ExpiringCert[]
+    day15: ExpiringCert[]
+    day30: ExpiringCert[]
+  }
+  collaborators_with_expired: Array<{ colaborador: string; count: number }>
 }
 
 export interface HoursSaved {
