@@ -1,7 +1,7 @@
 // Serviço central de notificações — decide o canal por tipo (PROMPT 6)
 // Todos os textos são strings fixas — zero IA aqui
 
-import { sendEmail } from './gmail.service.js'
+import { sendEmail } from './email.service.js'
 import { sendWhatsApp } from './whatsapp.service.js'
 import { getExpiryTemplate, getProcessingCompleteTemplate } from './templates.service.js'
 import { safeLog } from '../lib/logger.js'

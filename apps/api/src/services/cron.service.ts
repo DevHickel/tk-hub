@@ -1,7 +1,7 @@
 import cron from 'node-cron'
 import * as Sentry from '@sentry/node'
 import { supabase } from '../lib/supabase.js'
-import { sendEmail } from './gmail.service.js'
+import { sendEmail } from './email.service.js'
 import { getExpiryTemplate } from './templates.service.js'
 import { safeLog } from '../lib/logger.js'
 

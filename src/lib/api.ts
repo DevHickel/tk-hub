@@ -89,6 +89,15 @@ export interface ReportRecipient {
   created_at: string
 }
 
+export interface EmailConfig {
+  smtp_host: string
+  smtp_port: number
+  smtp_user: string
+  smtp_pass: string  // mascarado no GET
+  from_name: string
+  from_email: string
+}
+
 export interface DocumentsResponse {
   data: Document[]
   total: number
@@ -179,4 +188,16 @@ export const api = {
 
   sendTestReport: () =>
     request<{ success: boolean; message: string }>('/api/reports/send-test', { method: 'POST' }),
+
+  // ── E-mail config (SMTP) ────────────────────────────────────────────────────
+  getEmailConfig: () => request<EmailConfig>('/api/email-config'),
+
+  updateEmailConfig: (data: Partial<EmailConfig>) =>
+    request<{ success: boolean }>('/api/email-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  testEmailConfig: () =>
+    request<{ success: boolean; message: string }>('/api/email-config/test', { method: 'POST' }),
 }

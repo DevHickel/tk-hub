@@ -4,7 +4,7 @@ import { calcHoursSaved, calcAICost, DEFAULT_BENCHMARKS, type ReportConfig } fro
 import { buildManagementEmail } from './templates/management.template.js'
 import { buildHREmail } from './templates/hr.template.js'
 import { buildITEmail } from './templates/it.template.js'
-import { sendEmail } from '../gmail.service.js'
+import { sendEmail } from '../email.service.js'
 import { safeLog } from '../../lib/logger.js'
 import * as Sentry from '@sentry/node'
 import { format } from 'date-fns'
