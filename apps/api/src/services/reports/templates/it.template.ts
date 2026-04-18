@@ -142,15 +142,6 @@ export function buildITEmail(
       <tr><td>Embeddings em cache</td><td>${formatNumber(metrics.total_cache_entries)}</td></tr>
       <tr><td>Cache hit rate</td><td style="color:${cacheColor}">${cacheRate}% ${cacheRate >= 60 ? '✅' : '⚠️'}</td></tr>
     </table>
-
-    <!-- Top usuários -->
-    ${metrics.top_users.length > 0 ? `
-    <h3>👥 Usuários mais ativos</h3>
-    <table>
-      <thead><tr><td style="font-weight:600;font-size:12px;color:#64748B">Usuário</td><td style="font-weight:600;font-size:12px;color:#64748B;text-align:right">Consultas</td></tr></thead>
-      ${metrics.top_users.map((u) => `
-      <tr><td>${u.name}</td><td>${u.queries}</td></tr>`).join('')}
-    </table>` : ''}
   </div>
   <div class="ft">${footer}</div>
 </div></body></html>`

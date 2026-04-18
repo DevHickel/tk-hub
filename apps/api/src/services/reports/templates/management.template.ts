@@ -58,8 +58,8 @@ export function buildManagementEmail(
 
   <!-- Hero: economia -->
   <div class="hero">
-    <div class="num">${hoursSaved.hoursSaved.toFixed(1)}h</div>
-    <div class="label">Horas economizadas na semana</div>
+    <div class="num">${formatHoursMinutes(hoursSaved.minutesSaved)}</div>
+    <div class="label">Tempo economizado na semana (${hoursSaved.minutesSaved.toLocaleString('pt-BR')} minutos)</div>
     <div class="sub">≈ R$ ${formatBRL(hoursSaved.valueBRL)}</div>
   </div>
 
@@ -94,7 +94,7 @@ export function buildManagementEmail(
     <!-- Economia e ROI -->
     <h3>💰 Economia e investimento</h3>
     <table>
-      <tr><td>Horas economizadas</td><td>${hoursSaved.hoursSaved.toFixed(1)}h</td></tr>
+      <tr><td>Tempo economizado</td><td>${formatHoursMinutes(hoursSaved.minutesSaved)}</td></tr>
       <tr><td>Valor economizado</td><td style="color:#22C55E">R$ ${formatBRL(hoursSaved.valueBRL)}</td></tr>
       <tr><td>Custo de IA na semana</td><td>R$ ${formatBRL(aiCost.totalBRL)}</td></tr>
       <tr><td>Retorno sobre investimento (ROI)</td><td style="color:${roiColor}">${roi > 0 ? roi.toFixed(1) + 'x' : '—'}</td></tr>
@@ -126,6 +126,14 @@ export function buildManagementEmail(
       <tr><td>${t.tipo}</td><td>${t.count}</td></tr>`).join('')}
     </table>` : ''}
 
+    <!-- Usuários mais ativos -->
+    ${metrics.top_users.length > 0 ? `
+    <h3>👥 Usuários mais ativos</h3>
+    <table>
+      ${metrics.top_users.map((u) => `
+      <tr><td>${u.name}</td><td>${u.queries} consultas</td></tr>`).join('')}
+    </table>` : ''}
+
     <!-- Colaboradores com pendências (se houver) -->
     ${metrics.collaborators_with_expired.length > 0 ? `
     <h3>⚠️ Colaboradores com certificados vencidos</h3>
@@ -140,4 +148,10 @@ export function buildManagementEmail(
 
 function formatBRL(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function formatHoursMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60)
+  const m = Math.round(totalMinutes % 60)
+  return `${h}h${String(m).padStart(2, '0')}m`
 }
