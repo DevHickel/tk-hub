@@ -91,6 +91,7 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [form, setForm] = useState({ email: '', name: '', report_types: ['management'] as string[] })
 
   const { data: recipients = [], isLoading } = useQuery({
@@ -197,10 +198,19 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {recipients.length} destinatário{recipients.length !== 1 ? 's' : ''} cadastrado{recipients.length !== 1 ? 's' : ''}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-1">
+          <div className="relative max-w-xs flex-1">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nome ou e-mail..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
+          <p className="text-sm text-muted-foreground shrink-0">
+            {recipients.length} destinatário{recipients.length !== 1 ? 's' : ''}
           </p>
         </div>
         {canEdit && (
@@ -220,7 +230,12 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
               <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
               Nenhum destinatário cadastrado.
             </div>
-          ) : (
+          ) : (() => {
+            const q = searchQuery.toLowerCase().trim()
+            const filtered = q
+              ? recipients.filter((r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+              : recipients
+            return (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
@@ -231,7 +246,13 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {recipients.map((r) => (
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground text-sm">
+                      Nenhum resultado para &ldquo;{searchQuery}&rdquo;
+                    </td>
+                  </tr>
+                ) : filtered.map((r) => (
                   <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40">
                     <td className="px-4 py-3 font-medium">{r.name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{r.email}</td>
@@ -267,7 +288,8 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
                 ))}
               </tbody>
             </table>
-          )}
+            )
+          })()}
         </CardContent>
       </Card>
 
