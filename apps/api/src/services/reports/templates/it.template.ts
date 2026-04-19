@@ -16,10 +16,6 @@ export function buildITEmail(
   const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
 
   const totalTokens = metrics.total_tokens_week
-  const miniTokens = metrics.model_usage
-    .filter((r) => r.model_used === 'gpt-4o-mini')
-    .reduce((s, r) => s + (r.tokens_used ?? 0), 0)
-  const miniPct = totalTokens > 0 ? Math.round((miniTokens / totalTokens) * 100) : 0
 
   // Cache hit rate
   const totalCalls = metrics.rag_queries
@@ -110,11 +106,13 @@ export function buildITEmail(
 
     <!-- Distribuição de modelos -->
     <h3>🤖 Distribuição de modelos</h3>
-    <p style="font-size:13px;color:#64748B;margin-bottom:4px">gpt-4o-mini: ${miniPct}% | gpt-4o: ${100 - miniPct}%</p>
-    <div class="bar-bg">
-      <div class="bar-fill" style="width:${miniPct}%;background:#22C55E"></div>
-    </div>
-    <p style="font-size:11px;color:#64748B;margin-top:4px">gpt-4o-mini é o modelo mais econômico.</p>
+    ${Object.keys(aiCost.byModel).length > 0
+      ? Object.entries(aiCost.byModel).map(([m, v]) => {
+          const pct = totalTokens > 0 ? Math.round((v.tokens / totalTokens) * 100) : 0
+          return `<p style="font-size:13px;color:#64748B;margin-bottom:2px">${m}: ${pct}% (${formatTokens(v.tokens)} tokens)</p>`
+        }).join('')
+      : '<p style="font-size:13px;color:#64748B">Nenhum modelo utilizado na semana.</p>'
+    }
 
     <!-- Uso do assistente -->
     <h3>🧠 Assistente IA</h3>
