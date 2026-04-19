@@ -99,6 +99,23 @@ export interface EmailConfig {
   from_email: string
 }
 
+export interface CertificateInbox {
+  id: string
+  label: string
+  imap_host: string
+  imap_port: number
+  imap_user: string
+  imap_pass: string  // mascarado no GET
+  use_tls: boolean
+  active: boolean
+  last_uid: number
+  uid_validity: number
+  last_checked_at: string | null
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface DocumentsResponse {
   data: Document[]
   total: number
@@ -201,4 +218,29 @@ export const api = {
 
   testEmailConfig: () =>
     request<{ success: boolean; message: string }>('/api/email-config/test', { method: 'POST' }),
+
+  // ── Certificate Email Inboxes (IMAP) ─────────────────────────────────────────
+  listCertificateInboxes: () =>
+    request<CertificateInbox[]>('/api/certificate-inboxes'),
+
+  createCertificateInbox: (data: Omit<CertificateInbox, 'id' | 'last_uid' | 'uid_validity' | 'last_checked_at' | 'last_error' | 'created_at' | 'updated_at'>) =>
+    request<CertificateInbox>('/api/certificate-inboxes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateCertificateInbox: (id: string, data: Partial<CertificateInbox>) =>
+    request<{ success: boolean }>(`/api/certificate-inboxes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteCertificateInbox: (id: string) =>
+    request<{ success: boolean }>(`/api/certificate-inboxes/${id}`, { method: 'DELETE' }),
+
+  testCertificateInbox: (config: { imap_host: string; imap_port: number; imap_user: string; imap_pass: string; use_tls: boolean }) =>
+    request<{ success: boolean; message?: string; error?: string }>('/api/certificate-inboxes/test', {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
 }

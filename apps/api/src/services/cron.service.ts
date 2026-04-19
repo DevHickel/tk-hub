@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/node'
 import { supabase } from '../lib/supabase.js'
 import { sendEmail } from './email.service.js'
 import { getExpiryTemplate } from './templates.service.js'
+import { checkAllInboxes } from './inbox-monitor.service.js'
 import { safeLog } from '../lib/logger.js'
 
 function addDays(date: Date, days: number): Date {
@@ -96,5 +97,18 @@ export function setupCron() {
     { timezone: 'America/Sao_Paulo' }
   )
 
-  safeLog('info', 'Cron configurado: verificação de vencimentos às 08:00 BRT')
+  // A cada 10 minutos: verificar caixas de email para certificados
+  cron.schedule(
+    '*/10 * * * *',
+    async () => {
+      try {
+        await checkAllInboxes()
+      } catch (err) {
+        Sentry.captureException(err, { tags: { job: 'cron-inbox-monitor' } })
+      }
+    },
+    { timezone: 'America/Sao_Paulo' }
+  )
+
+  safeLog('info', 'Cron configurado: vencimentos às 08:00 BRT + inbox monitor a cada 10 min')
 }
