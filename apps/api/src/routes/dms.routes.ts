@@ -126,7 +126,7 @@ dmsRoutes.patch('/documents/:id', zValidator('json', patchSchema), async (c) => 
 
   // Só admin/manager pode alterar status para archived (security/SKILL.md §1)
   const body = c.req.valid('json')
-  if (body.status === 'archived' && !['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (body.status === 'archived' && !['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -145,8 +145,8 @@ dmsRoutes.patch('/documents/:id', zValidator('json', patchSchema), async (c) => 
 dmsRoutes.delete('/documents/:id', async (c) => {
   const userRole = c.get('userRole')
 
-  // Somente admin/manager/tk_master (security/SKILL.md §1)
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  // Somente admin/manager (security/SKILL.md §1)
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 

@@ -30,7 +30,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ collapsed = false, onToggle, onCollapse }: AppSidebarProps) {
-  const { profile, signOut, isAdmin } = useAuth()
+  const { profile, signOut, isManager } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -109,11 +109,11 @@ export function AppSidebar({ collapsed = false, onToggle, onCollapse }: AppSideb
 
         {/* Nav principal */}
         <nav className={cn('flex-1 space-y-1 transition-all duration-300', collapsed ? 'p-1.5' : 'p-3')}>
-          {isAdmin && navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
+          {isManager && navItem('/dashboard', <TrendingUp className="h-4 w-4" />, 'Dashboard')}
           {navItem('/chat', <MessageSquare className="h-4 w-4" />, 'Assistente IA')}
-          {isAdmin && navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
-          {isAdmin && navItem('/admin', <Shield className="h-4 w-4" />, 'Admin')}
-          {isAdmin && navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios')}
+          {isManager && navItem('/documents', <FileText className="h-4 w-4" />, 'Documentos')}
+          {isManager && navItem('/admin', <Shield className="h-4 w-4" />, 'Admin')}
+          {isManager && navItem('/report-settings', <BarChart3 className="h-4 w-4" />, 'Relatórios')}
           {navItem('/bug-report', <Bug className="h-4 w-4" />, 'Reportar Bug')}
         </nav>
 

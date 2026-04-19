@@ -81,18 +81,18 @@ app.use('*', async (c, next) => {
   const { data: { user }, error } = await supabaseAuth.auth.getUser(token)
   if (error || !user) return c.json({ error: 'Invalid token' }, 401)
 
-  // Buscar role da tabela profiles — nunca confiar em user_metadata (mutável pelo usuário)
+  // Buscar role da tabela user_roles (source of truth) — nunca confiar em user_metadata
   // security/SKILL.md §1: autorização sempre vem de fonte confiável no banco
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
+  const { data: roleRow } = await supabaseAdmin
+    .from('user_roles')
     .select('role')
-    .eq('id', user.id)
+    .eq('user_id', user.id)
     .single()
 
   // Dados do usuário verificados — disponíveis nas rotas via c.get()
   c.set('userId', user.id)
   c.set('userEmail', user.email ?? '')
-  c.set('userRole', ((profile?.role as string) ?? 'user').toLowerCase())
+  c.set('userRole', ((roleRow?.role as string) ?? 'user').toLowerCase())
 
   await next()
 })

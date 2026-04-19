@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { RequireAdmin } from "@/components/RequireAdmin";
+import { RequireManager } from "@/components/RequireAdmin";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -22,12 +22,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-/** Admins → /dashboard | Users → /chat | Loading → null */
+/** Manager+ → /dashboard | Users → /chat | Loading → null */
 function RootRedirect() {
-  const { user, isAdmin, loading } = useAuth()
+  const { user, isManager, loading } = useAuth()
   if (loading) return null
   if (!user) return <Navigate to="/login" replace />
-  return <Navigate to={isAdmin ? '/dashboard' : '/chat'} replace />
+  return <Navigate to={isManager ? '/dashboard' : '/chat'} replace />
 }
 
 const App = () => (
@@ -44,11 +44,11 @@ const App = () => (
               <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
-              {/* Admin-only routes */}
-              <Route path="/dashboard" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
-              <Route path="/documents" element={<RequireAdmin><Documents /></RequireAdmin>} />
-              <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
-              <Route path="/report-settings" element={<RequireAdmin><ReportSettings /></RequireAdmin>} />
+              {/* Manager+ routes */}
+              <Route path="/dashboard" element={<RequireManager><Dashboard /></RequireManager>} />
+              <Route path="/documents" element={<RequireManager><Documents /></RequireManager>} />
+              <Route path="/admin" element={<RequireManager><Admin /></RequireManager>} />
+              <Route path="/report-settings" element={<RequireManager><ReportSettings /></RequireManager>} />
               {/* All authenticated users */}
               <Route path="/chat" element={<Chat />} />
               <Route path="/settings" element={<Settings />} />

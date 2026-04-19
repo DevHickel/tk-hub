@@ -42,7 +42,7 @@ certificatesRoutes.post('/certificates/:id/extract', async (c) => {
 // GET /api/certificate-inboxes
 certificatesRoutes.get('/certificate-inboxes', async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -79,7 +79,7 @@ const inboxSchema = z.object({
 
 certificatesRoutes.post('/certificate-inboxes', zValidator('json', inboxSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -114,7 +114,7 @@ const inboxUpdateSchema = z.object({
 
 certificatesRoutes.put('/certificate-inboxes/:id', zValidator('json', inboxUpdateSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -141,7 +141,7 @@ certificatesRoutes.put('/certificate-inboxes/:id', zValidator('json', inboxUpdat
 // DELETE /api/certificate-inboxes/:id
 certificatesRoutes.delete('/certificate-inboxes/:id', async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -170,7 +170,7 @@ const testImapSchema = z.object({
 
 certificatesRoutes.post('/certificate-inboxes/test', zValidator('json', testImapSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 

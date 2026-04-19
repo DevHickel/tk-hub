@@ -18,9 +18,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
-import { logActivity } from '@/lib/activity';
+import { logActivity, ACTION_LABELS } from '@/lib/activity';
 
-type AppRole = 'admin' | 'user' | 'tk_master';
+type AppRole = 'admin' | 'manager' | 'user';
 
 interface UserWithRole {
   id: string;
@@ -32,8 +32,8 @@ interface UserWithRole {
 }
 
 const roleLabels: Record<AppRole, string> = {
-  tk_master: 'TK Owner',
   admin: 'Admin',
+  manager: 'Gerente',
   user: 'Usuário',
 };
 
@@ -56,31 +56,13 @@ interface Invite {
   expires_at: string;
 }
 
-// Mapa de ações para nomes amigáveis
-const actionLabels: Record<string, string> = {
-  'message_sent': 'Enviou mensagem',
-  'certificate_uploaded': 'Enviou certificado',
-  'certificate_deleted': 'Excluiu certificado',
-  'rag_document_uploaded': 'Enviou documento para IA',
-  'rag_document_deleted': 'Excluiu documento da IA',
-  'document_uploaded': 'Enviou documento',
-  'document_deleted': 'Excluiu documento',
-  'permission_changed': 'Alterou permissão',
-  'user_login': 'Entrou no sistema',
-  'user_logout': 'Saiu do sistema',
-  'invite_sent': 'Enviou convite',
-  'profile_updated': 'Atualizou perfil',
-  'upload': 'Enviou documento',
-  'delete_document': 'Excluiu documento',
-};
-
 const getActionLabel = (action: string): string => {
-  return actionLabels[action] || action;
+  return ACTION_LABELS[action] || action;
 };
 
 export default function Admin() {
   const navigate = useNavigate();
-  const { profile, user, appRoles } = useAuth();
+  const { profile, user } = useAuth();
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -90,14 +72,13 @@ export default function Admin() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
 
-  const { isAdmin, loading: authLoading } = useAuth();
-  const isTkMaster = appRoles.includes('tk_master');
+  const { isAdmin, isManager, loading: authLoading } = useAuth();
 
   // Hook para exclusão de usuário com cascade
   const userDelete = useDeleteWithConfirmation<string>({
     onDelete: async (userId) => {
       // Apenas TK Masters podem deletar usuários
-      if (!isTkMaster) {
+      if (!isAdmin) {
         throw new Error('Sem permissão para excluir usuários');
       }
 
@@ -183,13 +164,13 @@ export default function Admin() {
 
   useEffect(() => {
     if (authLoading) return; // wait for auth to resolve
-    if (!isAdmin) {
+    if (!isManager) {
       toast.error('Acesso negado');
-      navigate('/dashboard');
+      navigate('/chat');
       return;
     }
     fetchData();
-  }, [isAdmin, authLoading, navigate]);
+  }, [isManager, authLoading, navigate]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -360,7 +341,7 @@ export default function Admin() {
       }
     }
 
-    // Also update profile role for backwards compatibility (admin/user only)
+    // Also update profile role for backwards compatibility (profiles enum only has admin/user)
     const profileRole = newRole === 'user' ? 'user' : 'admin';
     await supabase
       .from('profiles')
@@ -420,20 +401,24 @@ export default function Admin() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : (
-        <Tabs defaultValue="users" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Usuários
-            </TabsTrigger>
+        <Tabs defaultValue={isAdmin ? "users" : "invites"} className="space-y-6">
+          <TabsList className={`grid w-full max-w-md ${isAdmin ? 'grid-cols-3' : 'grid-cols-1'}`}>
+            {isAdmin && (
+              <TabsTrigger value="users" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Usuários
+              </TabsTrigger>
+            )}
             <TabsTrigger value="invites" className="flex items-center gap-2">
               <Mail className="h-4 w-4" />
               Convites
             </TabsTrigger>
-            <TabsTrigger value="logs" className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Logs
-            </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="logs" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Logs
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="users">
@@ -461,16 +446,16 @@ export default function Admin() {
                       <TableHead>Cargo</TableHead>
                       <TableHead>Mensagens</TableHead>
                       <TableHead>Último Acesso</TableHead>
-                      {isTkMaster && <TableHead className="w-16">Ações</TableHead>}
+                      {isAdmin && <TableHead className="w-16">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredUsers.map((userItem) => {
-                      // TK Masters can edit everyone except themselves
-                      // Admins can only edit users with 'user' role (not other admins or tk_masters)
+                      // Admins can edit everyone except themselves
+                      // Managers can only edit users with 'user' role
                       const isOwnProfile = userItem.id === profile?.id;
-                      const canEditRole = isTkMaster 
-                        ? !isOwnProfile 
+                      const canEditRole = isAdmin
+                        ? !isOwnProfile
                         : (userItem.app_role === 'user' && !isOwnProfile);
                       
                       return (
@@ -487,8 +472,8 @@ export default function Admin() {
                                 <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
                               </SelectTrigger>
                               <SelectContent>
-                                {isTkMaster && <SelectItem value="tk_master">TK Owner</SelectItem>}
-                                <SelectItem value="admin">Admin</SelectItem>
+                                {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                                <SelectItem value="manager">Gerente</SelectItem>
                                 <SelectItem value="user">Usuário</SelectItem>
                               </SelectContent>
                             </Select>
@@ -503,7 +488,7 @@ export default function Admin() {
                               ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
                               : '-'}
                           </TableCell>
-                          {isTkMaster && (
+                          {isAdmin && (
                             <TableCell>
                               <Button
                                 variant="ghost"

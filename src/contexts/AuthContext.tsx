@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-type AppRole = 'admin' | 'user' | 'tk_master';
+type AppRole = 'admin' | 'manager' | 'user';
 
 interface Profile {
   id: string;
@@ -19,7 +19,10 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   appRoles: AppRole[];
+  /** True for admin (full access) */
   isAdmin: boolean;
+  /** True for manager or admin (mid-level+) */
+  isManager: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -35,7 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [appRoles, setAppRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = appRoles.includes('admin') || appRoles.includes('tk_master');
+  const isAdmin = appRoles.includes('admin');
+  const isManager = isAdmin || appRoles.includes('manager');
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -162,7 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, appRoles, isAdmin, loading, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, appRoles, isAdmin, isManager, loading, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );

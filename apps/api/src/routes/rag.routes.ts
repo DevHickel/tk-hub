@@ -214,7 +214,7 @@ ragRoutes.post(
     const userId = c.get('userId')
     const userRole = c.get('userRole')
 
-    if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    if (!['admin', 'manager'].includes(userRole)) {
       return c.json({ error: 'Insufficient permissions' }, 403)
     }
 

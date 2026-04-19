@@ -71,7 +71,7 @@ async function getAdminEmails(): Promise<string[]> {
   const { data } = await supabase
     .from('user_roles')
     .select('profiles(email)')
-    .in('role', ['admin', 'tk_master'])
+    .in('role', ['admin', 'manager'])
 
   return (data ?? [])
     .map((r: { profiles: { email: string | null } | { email: string | null }[] | null }) => {

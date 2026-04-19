@@ -837,10 +837,10 @@ function EmailTab({ canEdit }: { canEdit: boolean }) {
 
 // ── Página principal ─────────────────────────────────────────────────────────
 export default function ReportSettings() {
-  const { isAdmin, profile } = useAuth()
+  const { isManager } = useAuth()
 
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed()
-  const canEdit = isAdmin || ['manager', 'tk_master'].includes((profile as { role?: string })?.role ?? '')
+  const canEdit = isManager
 
   return (
     <div className="flex h-screen bg-background">

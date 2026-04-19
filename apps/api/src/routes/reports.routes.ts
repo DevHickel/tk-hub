@@ -45,7 +45,7 @@ const configSchema = z.object({
 
 reportsRoutes.put('/reports/config', zValidator('json', configSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -82,7 +82,7 @@ const recipientSchema = z.object({
 
 reportsRoutes.post('/reports/recipients', zValidator('json', recipientSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -110,7 +110,7 @@ const recipientUpdateSchema = z.object({
 
 reportsRoutes.put('/reports/recipients/:id', zValidator('json', recipientUpdateSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -132,7 +132,7 @@ reportsRoutes.put('/reports/recipients/:id', zValidator('json', recipientUpdateS
 // ── DELETE /api/reports/recipients/:id ──────────────────────────────────────
 reportsRoutes.delete('/reports/recipients/:id', async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -148,7 +148,7 @@ reportsRoutes.delete('/reports/recipients/:id', async (c) => {
 // ── POST /api/reports/send-test ─────────────────────────────────────────────
 reportsRoutes.post('/reports/send-test', sendTestRateLimiter, async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+  if (!['admin', 'manager'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -177,7 +177,7 @@ reportsRoutes.post('/reports/send-test', sendTestRateLimiter, async (c) => {
 // ── GET /api/email-config ──────────────────────────────────────────────────
 reportsRoutes.get('/email-config', async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -212,7 +212,7 @@ const emailConfigSchema = z.object({
 
 reportsRoutes.put('/email-config', zValidator('json', emailConfigSchema), async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 
@@ -239,7 +239,7 @@ reportsRoutes.put('/email-config', zValidator('json', emailConfigSchema), async 
 // ── POST /api/email-config/test ────────────────────────────────────────────
 reportsRoutes.post('/email-config/test', async (c) => {
   const userRole = c.get('userRole')
-  if (!['admin', 'tk_master'].includes(userRole)) {
+  if (!['admin'].includes(userRole)) {
     return c.json({ error: 'Insufficient permissions' }, 403)
   }
 

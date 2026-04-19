@@ -34,7 +34,7 @@ interface BugReportData {
 
 export default function BugReport() {
   const navigate = useNavigate();
-  const { user, profile, appRoles } = useAuth();
+  const { user, profile, isManager } = useAuth();
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar, schedulePendingCollapse } = useSidebarCollapsed();
   const [description, setDescription] = useState('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -51,7 +51,7 @@ export default function BugReport() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
 
-  const canManageReports = profile?.role === 'admin' || appRoles.includes('admin') || appRoles.includes('tk_master');
+  const canManageReports = isManager;
 
   // Filtered reports
   const filteredReports = useMemo(() => {

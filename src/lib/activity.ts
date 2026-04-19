@@ -23,7 +23,7 @@ export async function logActivity(
     await supabase.from('activity_logs').insert({
       user_id: userId,
       action,
-      details: details ?? null,
+      details: (details ?? null) as unknown as undefined,
     })
   } catch {
     // Logging failure must never crash the main flow
@@ -32,16 +32,21 @@ export async function logActivity(
 
 /** Maps action keys to human-readable Portuguese labels */
 export const ACTION_LABELS: Record<string, string> = {
-  message_sent: 'Enviou mensagem no assistente',
-  message_feedback_positive: 'Avaliou resposta como útil',
-  message_feedback_negative: 'Avaliou resposta como não útil',
-  invite_sent: 'Enviou convite de registro',
-  certificate_uploaded: 'Enviou certificado',
-  rag_document_uploaded: 'Enviou documento para IA',
-  rag_document_deleted: 'Excluiu documento da IA',
-  certificate_deleted: 'Excluiu certificado',
-  permission_changed: 'Alterou permissão de usuário',
-  user_login: 'Entrou no sistema',
-  user_logout: 'Saiu do sistema',
-  profile_updated: 'Atualizou o perfil',
+  message_sent: 'Enviou uma mensagem no assistente de IA',
+  message_feedback_positive: 'Avaliou uma resposta da IA como positiva',
+  message_feedback_negative: 'Avaliou uma resposta da IA como negativa',
+  invite_sent: 'Enviou um convite de cadastro por e-mail',
+  certificate_uploaded: 'Fez upload de um certificado para extração',
+  certificate_deleted: 'Excluiu um certificado do sistema',
+  rag_document_uploaded: 'Enviou um documento para a base de conhecimento',
+  rag_document_deleted: 'Removeu um documento da base de conhecimento',
+  permission_changed: 'Alterou o cargo de um usuário',
+  user_login: 'Fez login no sistema',
+  user_logout: 'Fez logout do sistema',
+  profile_updated: 'Atualizou as informações do perfil',
+  // Legacy keys (backward compat)
+  document_uploaded: 'Enviou um documento',
+  document_deleted: 'Excluiu um documento',
+  upload: 'Enviou um documento',
+  delete_document: 'Excluiu um documento',
 }
