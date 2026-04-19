@@ -41,7 +41,9 @@ import {
   ShieldCheck,
   Mails,
   Server,
+  Pencil,
 } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
 
 const REPORT_TYPE_LABELS: Record<string, string> = {
   management: 'Gestão',
@@ -88,20 +90,51 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
   const qc = useQueryClient()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ email: '', name: '', report_type: 'management' as ReportRecipient['report_type'] })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ email: '', name: '', report_types: ['management'] as string[] })
 
   const { data: recipients = [], isLoading } = useQuery({
     queryKey: ['report-recipients'],
     queryFn: () => api.listRecipients(),
   })
 
-  const addMutation = useMutation({
-    mutationFn: () => api.addRecipient(form),
+  const resetForm = () => {
+    setForm({ email: '', name: '', report_types: ['management'] })
+    setEditingId(null)
+  }
+
+  const toggleType = (type: string) => {
+    setForm((f) => {
+      if (type === 'all') return { ...f, report_types: ['all'] }
+      const without = f.report_types.filter((t) => t !== 'all')
+      const has = without.includes(type)
+      const next = has ? without.filter((t) => t !== type) : [...without, type]
+      return { ...f, report_types: next.length === 0 ? ['management'] : next }
+    })
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const types = form.report_types.includes('all') ? ['all'] : form.report_types
+      if (editingId) {
+        // Edit: update the existing recipient with the first type, delete+recreate extras
+        await api.updateRecipient(editingId, { email: form.email, name: form.name, report_type: types[0] as ReportRecipient['report_type'] })
+        // If multiple types selected, create additional recipients
+        for (const t of types.slice(1)) {
+          await api.addRecipient({ email: form.email, name: form.name, report_type: t as ReportRecipient['report_type'] })
+        }
+      } else {
+        // Create: one recipient per selected type
+        for (const t of types) {
+          await api.addRecipient({ email: form.email, name: form.name, report_type: t as ReportRecipient['report_type'] })
+        }
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['report-recipients'] })
       setOpen(false)
-      setForm({ email: '', name: '', report_type: 'management' })
-      toast({ title: 'Destinatário adicionado' })
+      resetForm()
+      toast({ title: editingId ? 'Destinatário atualizado' : 'Destinatário adicionado' })
     },
     onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
   })
@@ -114,6 +147,17 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
     },
     onError: (err: Error) => toast({ title: 'Erro', description: err.message, variant: 'destructive' }),
   })
+
+  const openEdit = (r: ReportRecipient) => {
+    setEditingId(r.id)
+    setForm({ email: r.email, name: r.name, report_types: [r.report_type] })
+    setOpen(true)
+  }
+
+  const openAdd = () => {
+    resetForm()
+    setOpen(true)
+  }
 
   return (
     <div className="space-y-4">
@@ -156,7 +200,7 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
           </p>
         </div>
         {canEdit && (
-          <Button size="sm" onClick={() => setOpen(true)}>
+          <Button size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1" />
             Adicionar
           </Button>
@@ -194,15 +238,25 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
                     </td>
                     {canEdit && (
                       <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteMutation.mutate(r.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-primary"
+                            onClick={() => openEdit(r)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => deleteMutation.mutate(r.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -213,11 +267,11 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
         </CardContent>
       </Card>
 
-      {/* Modal adicionar destinatário */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Modal adicionar/editar destinatário */}
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adicionar destinatário</DialogTitle>
+            <DialogTitle>{editingId ? 'Editar destinatário' : 'Adicionar destinatário'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
@@ -239,29 +293,36 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
             </div>
             <div className="space-y-1.5">
               <Label>Tipo de relatório</Label>
-              <Select
-                value={form.report_type}
-                onValueChange={(v) => setForm((f) => ({ ...f, report_type: v as ReportRecipient['report_type'] }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="management">Gestão</SelectItem>
-                  <SelectItem value="hr">RH</SelectItem>
-                  <SelectItem value="it">TI</SelectItem>
-                  <SelectItem value="all">Todos</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="space-y-2 mt-1">
+                {([
+                  { value: 'management', label: 'Gestão' },
+                  { value: 'hr', label: 'RH' },
+                  { value: 'it', label: 'TI' },
+                  { value: 'all', label: 'Todos' },
+                ] as const).map((opt) => {
+                  const isAll = form.report_types.includes('all')
+                  const disabled = opt.value !== 'all' && isAll
+                  return (
+                    <label key={opt.value} className={`flex items-center gap-2 text-sm ${disabled ? 'opacity-40' : ''}`}>
+                      <Checkbox
+                        checked={form.report_types.includes(opt.value)}
+                        disabled={disabled}
+                        onCheckedChange={() => toggleType(opt.value)}
+                      />
+                      {opt.label}
+                    </label>
+                  )
+                })}
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancelar</Button>
             <Button
-              onClick={() => addMutation.mutate()}
-              disabled={!form.email || !form.name || addMutation.isPending}
+              onClick={() => saveMutation.mutate()}
+              disabled={!form.email || !form.name || form.report_types.length === 0 || saveMutation.isPending}
             >
-              {addMutation.isPending ? 'Salvando...' : 'Adicionar'}
+              {saveMutation.isPending ? 'Salvando...' : editingId ? 'Salvar' : 'Adicionar'}
             </Button>
           </DialogFooter>
         </DialogContent>

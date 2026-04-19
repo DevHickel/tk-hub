@@ -201,6 +201,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updateRecipient: (id: string, data: Partial<Omit<ReportRecipient, 'id' | 'active' | 'created_at'>>) =>
+    request<{ success: boolean }>(`/api/reports/recipients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   deleteRecipient: (id: string) =>
     request<{ success: boolean }>(`/api/reports/recipients/${id}`, { method: 'DELETE' }),
 

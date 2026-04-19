@@ -101,6 +101,34 @@ reportsRoutes.post('/reports/recipients', zValidator('json', recipientSchema), a
   }
 })
 
+// ── PUT /api/reports/recipients/:id ─────────────────────────────────────────
+const recipientUpdateSchema = z.object({
+  email:       z.string().email().optional(),
+  name:        z.string().min(2).max(200).optional(),
+  report_type: z.enum(['management', 'hr', 'it', 'all']).optional(),
+})
+
+reportsRoutes.put('/reports/recipients/:id', zValidator('json', recipientUpdateSchema), async (c) => {
+  const userRole = c.get('userRole')
+  if (!['admin', 'manager', 'tk_master'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  const id = c.req.param('id')
+  const body = c.req.valid('json')
+  try {
+    const { error } = await supabase
+      .from('report_recipients')
+      .update(body)
+      .eq('id', id)
+    if (error) throw error
+    return c.json({ success: true })
+  } catch (error) {
+    Sentry.captureException(error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
 // ── DELETE /api/reports/recipients/:id ──────────────────────────────────────
 reportsRoutes.delete('/reports/recipients/:id', async (c) => {
   const userRole = c.get('userRole')
