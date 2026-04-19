@@ -105,11 +105,15 @@ function RecipientsTab({ canEdit }: { canEdit: boolean }) {
 
   const toggleType = (type: string) => {
     setForm((f) => {
-      if (type === 'all') return { ...f, report_types: ['all'] }
+      if (type === 'all') {
+        // Toggle: se já está com 'all', desmarca tudo e volta vazio
+        return { ...f, report_types: f.report_types.includes('all') ? [] : ['all'] }
+      }
+      // Remove 'all' se estiver, depois toggle o tipo individual
       const without = f.report_types.filter((t) => t !== 'all')
       const has = without.includes(type)
       const next = has ? without.filter((t) => t !== type) : [...without, type]
-      return { ...f, report_types: next.length === 0 ? ['management'] : next }
+      return { ...f, report_types: next }
     })
   }
 
