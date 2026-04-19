@@ -67,7 +67,7 @@ function getHRFooter(lang: 'pt' | 'en', settingsLink: string): string {
         • <strong>🔵 16–30 days:</strong> certificates approaching expiry — plan ahead.
       </p>
       <p>
-        • Automatic alerts are sent at 30, 15, 7, 3 and 1 day before expiry, and on the day it expires.<br>
+        • Automatic alerts are sent 30, 15, 7, 3 and 1 day before expiry and on the expiry day.<br>
         • Recipients and schedule can be configured at ${settingsLink}.
       </p>
     </div>`
@@ -82,7 +82,7 @@ function getHRFooter(lang: 'pt' | 'en', settingsLink: string): string {
         • <strong>🔵 16–30 dias:</strong> certificados se aproximando do vencimento — planeje com antecedência.
       </p>
       <p>
-        • Alertas automáticos são enviados 30, 15, 7, 3 e 1 dia antes do vencimento, e no dia em que vence.<br>
+        • Alertas automáticos são enviados 30, 15, 7, 3 e 1 dia antes do vencimento e no dia do vencimento.<br>
         • Destinatários e agendamento podem ser configurados em ${settingsLink}.
       </p>
     </div>`

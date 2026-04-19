@@ -162,7 +162,7 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
       </tr>
       <tr>
         <td>Alertas de vencimento configurados</td>
-        <td style="text-align:right;font-weight:600">30, 15, 7, 3 e 1 dia antes</td>
+        <td style="text-align:right;font-weight:600">30, 15, 7, 3, 1 e no dia</td>
       </tr>
     </table>
   </div>

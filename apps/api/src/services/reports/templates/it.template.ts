@@ -114,7 +114,7 @@ export function buildITEmail(
     <div class="bar-bg">
       <div class="bar-fill" style="width:${miniPct}%;background:#22C55E"></div>
     </div>
-    <p style="font-size:11px;color:#64748B;margin-top:4px">Verde = gpt-4o-mini (mais econômico). Meta: ≥ 80%.</p>
+    <p style="font-size:11px;color:#64748B;margin-top:4px">gpt-4o-mini é o modelo mais econômico.</p>
 
     <!-- Uso do assistente -->
     <h3>🧠 Assistente IA</h3>
