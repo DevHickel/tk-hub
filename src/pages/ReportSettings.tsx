@@ -778,7 +778,7 @@ export default function ReportSettings() {
               </TabsTrigger>
               <TabsTrigger value="benchmarks" className="flex items-center gap-1.5">
                 <Timer className="h-3.5 w-3.5" />
-                Economia de tempo
+                Configurações
               </TabsTrigger>
               <TabsTrigger value="preferences" className="flex items-center gap-1.5">
                 <Settings className="h-3.5 w-3.5" />
