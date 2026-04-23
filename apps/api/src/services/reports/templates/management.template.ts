@@ -16,17 +16,14 @@ export function buildManagementEmail(
   const period = `${format(weekStart, 'dd/MM', { locale })} a ${format(weekEnd, 'dd/MM/yyyy', { locale })}`
   const footer = getFooterExplanations(config, lang, 'management')
 
-  // Custos: IA + infraestrutura
   const weeklyFixedCost = (config.monthly_fixed_cost_brl ?? 0) / 4.33
   const totalWeeklyCost = aiCost.totalBRL + weeklyFixedCost
 
-  // ROI: economia vs custo total
   const roi = totalWeeklyCost > 0
     ? Math.round((hoursSaved.valueBRL / totalWeeklyCost) * 100) / 100
     : 0
   const roiColor = roi >= 5 ? '#22C55E' : roi >= 2 ? '#F59E0B' : '#EF4444'
 
-  // Certificados urgentes
   const tiers = metrics.certs_expiring_tiers
   const certsUrgent = tiers.expired.length + tiers.day1.length + tiers.day3.length + tiers.day7.length
 
@@ -63,8 +60,8 @@ export function buildManagementEmail(
   <!-- Hero: economia -->
   <div class="hero">
     <div class="num">${formatHoursMinutes(hoursSaved.minutesSaved)}</div>
-    <div class="label">Tempo economizado na semana (${hoursSaved.minutesSaved.toLocaleString('pt-BR')} min)</div>
-    <div class="sub">≈ R$ ${formatBRL(hoursSaved.valueBRL)}</div>
+    <div class="label">Tempo que a IA economizou para a equipe nesta semana</div>
+    <div class="sub">Valor equivalente: R$ ${formatBRL(hoursSaved.valueBRL)}</div>
   </div>
 
   <!-- 4 KPIs -->
@@ -72,61 +69,49 @@ export function buildManagementEmail(
     <table style="border:none"><tr>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:${roiColor}">${roi > 0 ? roi.toFixed(1) + 'x' : '—'}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">ROI da IA</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Retorno sobre o gasto</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.active_users}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Usuários ativos</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Pessoas que usaram</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.total_certs}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Certificados ativos</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Certificados no sistema</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;width:25%">
         <div style="font-size:24px;font-weight:700;color:${certsUrgent > 0 ? '#EF4444' : '#22C55E'}">${certsUrgent}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Cert. urgentes</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Precisam de atenção</div>
       </td>
     </tr></table>
   </div>
 
   <div class="body">
-    <!-- Alertas -->
-    ${tiers.expired.length > 0 ? `<div class="alert alert-red">🔴 <strong>${tiers.expired.length} certificado${tiers.expired.length > 1 ? 's' : ''} vencido${tiers.expired.length > 1 ? 's' : ''}</strong> — ação necessária.</div>` : ''}
+    <!-- Alerta único sobre certificados -->
+    ${tiers.expired.length > 0 ? `<div class="alert alert-red">🔴 <strong>${tiers.expired.length} certificado${tiers.expired.length > 1 ? 's' : ''} vencido${tiers.expired.length > 1 ? 's' : ''}</strong> — o RH precisa tomar providências.</div>` : ''}
     ${certsUrgent > 0 && tiers.expired.length === 0 ? `<div class="alert alert-yellow">⚠️ <strong>${certsUrgent} certificado${certsUrgent > 1 ? 's' : ''}</strong> vencendo nos próximos 7 dias.</div>` : ''}
     ${certsUrgent === 0 && tiers.expired.length === 0 ? `<div class="alert alert-green">✅ <strong>Todos os certificados estão em dia.</strong></div>` : ''}
 
-    <!-- Economia e ROI -->
-    <h3>💰 Economia e investimento</h3>
+    <!-- Como a IA ajudou -->
+    <h3>🤖 Como a IA ajudou esta semana</h3>
     <table>
-      <tr><td>Tempo economizado</td><td>${formatHoursMinutes(hoursSaved.minutesSaved)}</td></tr>
-      <tr><td>Valor economizado</td><td style="color:#22C55E">R$ ${formatBRL(hoursSaved.valueBRL)}</td></tr>
-      <tr><td>Custo de IA na semana</td><td>R$ ${formatBRL(aiCost.totalBRL)}</td></tr>
-      ${weeklyFixedCost > 0 ? `<tr><td>Custo fixo semanal (infra)</td><td>R$ ${formatBRL(weeklyFixedCost)}</td></tr>` : ''}
-      <tr><td><strong>Custo total semanal</strong></td><td><strong>R$ ${formatBRL(totalWeeklyCost)}</strong></td></tr>
-      <tr><td>Retorno sobre investimento (ROI)</td><td style="color:${roiColor}">${roi > 0 ? roi.toFixed(1) + 'x' : '—'}</td></tr>
+      <tr><td>Perguntas respondidas pelo assistente</td><td>${metrics.rag_queries}</td></tr>
+      <tr><td>Certificados cadastrados automaticamente</td><td>${metrics.certs_processed_week}</td></tr>
+      <tr><td>Documentos adicionados à base de conhecimento</td><td>${metrics.rag_docs_total}</td></tr>
     </table>
 
-    <!-- Produtividade -->
-    <h3>📊 Produtividade</h3>
+    <!-- Quanto custou e quanto retornou -->
+    <h3>💰 Quanto custou e quanto retornou</h3>
     <table>
-      <tr><td>Consultas ao assistente IA</td><td>${metrics.rag_queries}</td></tr>
-      <tr><td>Certificados cadastrados na semana</td><td>${metrics.certs_processed_week}</td></tr>
-      <tr><td>Documentos RAG indexados</td><td>${metrics.rag_docs_total}</td></tr>
-      <tr><td>Usuários ativos na semana</td><td>${metrics.active_users}</td></tr>
-    </table>
-
-    <!-- Situação dos certificados -->
-    <h3>📋 Situação dos certificados</h3>
-    <table>
-      <tr><td>Total de certificados ativos</td><td>${metrics.total_certs}</td></tr>
-      <tr><td>Novos na semana</td><td>${metrics.certs_processed_week}</td></tr>
-      <tr><td>Vencendo em até 30 dias</td><td style="color:${metrics.certs_expiring_count > 0 ? '#F59E0B' : 'inherit'}">${metrics.certs_expiring_count}</td></tr>
-      <tr><td>Vencidos</td><td style="color:${metrics.certs_expired_count > 0 ? '#EF4444' : 'inherit'}">${metrics.certs_expired_count}</td></tr>
+      <tr><td>Custo da IA na semana</td><td>R$ ${formatBRL(aiCost.totalBRL)}</td></tr>
+      ${weeklyFixedCost > 0 ? `<tr><td>Custo fixo semanal (infraestrutura)</td><td>R$ ${formatBRL(weeklyFixedCost)}</td></tr>` : ''}
+      <tr><td><strong>Custo total da semana</strong></td><td><strong>R$ ${formatBRL(totalWeeklyCost)}</strong></td></tr>
+      <tr><td>Retorno sobre o gasto</td><td style="color:${roiColor}">${roi > 0 ? `${roi.toFixed(1)}x — cada R$ 1 gasto rendeu R$ ${roi.toFixed(2)} em tempo economizado` : '—'}</td></tr>
     </table>
 
     <!-- Top tipos de certificado -->
     ${metrics.certs_by_type.length > 0 ? `
-    <h3>📑 Certificados por tipo</h3>
+    <h3>📑 Tipos de certificado mais comuns</h3>
     <table>
       ${metrics.certs_by_type.slice(0, 5).map((t) => `
       <tr><td>${t.tipo}</td><td>${t.count}</td></tr>`).join('')}
@@ -134,10 +119,10 @@ export function buildManagementEmail(
 
     <!-- Usuários mais ativos -->
     ${metrics.top_users.length > 0 ? `
-    <h3>👥 Usuários mais ativos</h3>
+    <h3>👥 Pessoas que mais usaram a IA</h3>
     <table>
       ${metrics.top_users.map((u) => `
-      <tr><td>${u.name}</td><td>${u.queries} consultas</td></tr>`).join('')}
+      <tr><td>${u.name}</td><td>${u.queries} perguntas</td></tr>`).join('')}
     </table>` : ''}
 
     <!-- Colaboradores com pendências (se houver) -->

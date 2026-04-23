@@ -17,17 +17,14 @@ export function buildITEmail(
 
   const totalTokens = metrics.total_tokens_week
 
-  // Cache hit rate
   const totalCalls = metrics.rag_queries
   const cacheRate = totalCalls > 0 ? Math.round((metrics.cache_hits / totalCalls) * 100) : 0
   const cacheColor = cacheRate >= 60 ? '#22C55E' : cacheRate >= 40 ? '#F59E0B' : '#EF4444'
 
-  // Feedback satisfaction
   const totalFeedback = metrics.feedback_positive + metrics.feedback_negative
   const satisfactionPct = totalFeedback > 0 ? Math.round((metrics.feedback_positive / totalFeedback) * 100) : 0
   const satisfactionColor = satisfactionPct >= 80 ? '#22C55E' : satisfactionPct >= 60 ? '#F59E0B' : '#EF4444'
 
-  // Processing health (RAG docs)
   const docsTotal = metrics.rag_docs_week + metrics.docs_error_week
   const successRate = docsTotal > 0 ? Math.round((metrics.rag_docs_week / docsTotal) * 100) : 100
   const successColor = successRate >= 95 ? '#22C55E' : successRate >= 80 ? '#F59E0B' : '#EF4444'
@@ -49,8 +46,6 @@ export function buildITEmail(
   td{padding:10px 8px;font-size:14px;border-bottom:1px solid #f1f5f9}
   tr:nth-child(even) td{background:#f8fafc}
   td:last-child{text-align:right;font-weight:600}
-  .bar-bg{background:#e5e7eb;border-radius:4px;height:12px;overflow:hidden;margin-top:4px}
-  .bar-fill{height:100%;border-radius:4px}
   .alert{padding:12px;border-radius:4px;margin-bottom:12px;font-size:13px}
   .alert-red{background:#FEF2F2;border-left:4px solid #EF4444}
   .alert-yellow{background:#FFFBEB;border-left:4px solid #F59E0B}
@@ -65,7 +60,7 @@ export function buildITEmail(
   <!-- Hero: custo total de IA -->
   <div class="hero">
     <div class="num" style="color:#1E293B">R$ ${aiCost.totalBRL.toFixed(2)}</div>
-    <div class="label">Custo total de IA na semana</div>
+    <div class="label">Quanto a IA custou nesta semana</div>
   </div>
 
   <!-- 4 KPIs -->
@@ -73,19 +68,19 @@ export function buildITEmail(
     <table style="border:none"><tr>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:${cacheColor}">${cacheRate}%</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Cache hit rate</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Respostas pelo cache</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:${successColor}">${successRate}%</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Taxa de sucesso</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Documentos processados com sucesso</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;border-right:1px solid #e5e7eb;width:25%">
         <div style="font-size:24px;font-weight:700;color:#1E293B">${metrics.active_users}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Usuários ativos</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Pessoas que usaram</div>
       </td>
       <td style="text-align:center;padding:16px;border-bottom:none;width:25%">
         <div style="font-size:24px;font-weight:700;color:${satisfactionColor}">${totalFeedback > 0 ? satisfactionPct + '%' : '—'}</div>
-        <div style="font-size:11px;color:#64748B;margin-top:4px">Satisfação IA</div>
+        <div style="font-size:11px;color:#64748B;margin-top:4px">Respostas aprovadas</div>
       </td>
     </tr></table>
   </div>
@@ -97,49 +92,31 @@ export function buildITEmail(
 
     <!-- Custo por modelo -->
     <h3>💰 Custo de IA por modelo</h3>
+    ${Object.keys(aiCost.byModel).length > 0 ? `
     <table>
-      <tr><td>Total estimado</td><td>R$ ${aiCost.totalBRL.toFixed(2)}</td></tr>
-      ${Object.entries(aiCost.byModel).map(([m, v]) =>
-        `<tr><td>${m}</td><td>${formatTokens(v.tokens)} tokens / R$ ${v.brl.toFixed(2)}</td></tr>`
-      ).join('')}
-    </table>
-
-    <!-- Distribuição de modelos -->
-    <h3>🤖 Distribuição de modelos</h3>
-    ${Object.keys(aiCost.byModel).length > 0
-      ? Object.entries(aiCost.byModel).map(([m, v]) => {
-          const pct = totalTokens > 0 ? Math.round((v.tokens / totalTokens) * 100) : 0
-          return `<p style="font-size:13px;color:#64748B;margin-bottom:2px">${m}: ${pct}% (${formatTokens(v.tokens)} tokens)</p>`
-        }).join('')
-      : '<p style="font-size:13px;color:#64748B">Nenhum modelo utilizado na semana.</p>'
-    }
+      ${Object.entries(aiCost.byModel).map(([m, v]) => {
+        const pct = totalTokens > 0 ? Math.round((v.tokens / totalTokens) * 100) : 0
+        return `<tr><td>${m} <span style="color:#64748B;font-size:12px">(${pct}% do uso)</span></td><td>R$ ${v.brl.toFixed(2)} — ${formatTokens(v.tokens)} tokens</td></tr>`
+      }).join('')}
+    </table>` : '<p style="font-size:13px;color:#64748B">Nenhum modelo utilizado na semana.</p>'}
 
     <!-- Uso do assistente -->
-    <h3>🧠 Assistente IA</h3>
+    <h3>🧠 Uso do assistente</h3>
     <table>
-      <tr><td>Consultas na semana</td><td>${metrics.rag_queries}</td></tr>
+      <tr><td>Perguntas feitas</td><td>${metrics.rag_queries}</td></tr>
+      <tr><td>Respostas aproveitadas do cache</td><td>${metrics.cache_hits}</td></tr>
       <tr><td>Tokens consumidos</td><td>${formatTokens(totalTokens)}</td></tr>
-      <tr><td>Média por consulta</td><td>${formatTokens(metrics.avg_tokens_per_query)} tokens</td></tr>
-      <tr><td>Consultas atendidas pelo cache</td><td>${metrics.cache_hits}</td></tr>
-      ${totalFeedback > 0 ? `<tr><td>Feedback dos usuários</td><td>👍 ${metrics.feedback_positive} / 👎 ${metrics.feedback_negative}</td></tr>` : ''}
+      <tr><td>Média de tokens por pergunta</td><td>${formatTokens(metrics.avg_tokens_per_query)}</td></tr>
+      ${totalFeedback > 0 ? `<tr><td>Avaliação das respostas</td><td>👍 ${metrics.feedback_positive} / 👎 ${metrics.feedback_negative}</td></tr>` : ''}
     </table>
 
-    <!-- Documentos RAG -->
-    <h3>📄 Documentos RAG</h3>
+    <!-- Documentos -->
+    <h3>📄 Processamento de documentos</h3>
     <table>
-      <tr><td>Documentos indexados</td><td>${metrics.rag_docs_total}</td></tr>
+      <tr><td>Total na base de conhecimento</td><td>${metrics.rag_docs_total}</td></tr>
       <tr><td>Adicionados na semana</td><td>${metrics.rag_docs_week}</td></tr>
-      <tr><td>Erros de processamento</td><td style="color:${metrics.docs_error_week > 0 ? '#EF4444' : 'inherit'}">${metrics.docs_error_week}</td></tr>
-      <tr><td>Em processamento agora</td><td style="color:${metrics.docs_processing > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_processing}</td></tr>
-    </table>
-
-    <!-- Infraestrutura RAG -->
-    <h3>🗄️ Base de conhecimento</h3>
-    <table>
-      <tr><td>Total de documentos RAG</td><td>${metrics.rag_docs_total}</td></tr>
-      <tr><td>Chunks no índice vetorial</td><td>${formatNumber(metrics.total_chunks)}</td></tr>
-      <tr><td>Embeddings em cache</td><td>${formatNumber(metrics.total_cache_entries)}</td></tr>
-      <tr><td>Cache hit rate</td><td style="color:${cacheColor}">${cacheRate}% ${cacheRate >= 60 ? '✅' : '⚠️'}</td></tr>
+      <tr><td>Erros na semana</td><td style="color:${metrics.docs_error_week > 0 ? '#EF4444' : 'inherit'}">${metrics.docs_error_week}</td></tr>
+      <tr><td>Travados em processamento</td><td style="color:${metrics.docs_processing > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_processing}</td></tr>
     </table>
   </div>
   <div class="ft">${footer}</div>
@@ -150,8 +127,4 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return String(n)
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString('pt-BR')
 }

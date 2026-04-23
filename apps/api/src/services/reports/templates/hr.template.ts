@@ -15,7 +15,6 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
   const heroColor = tiers.expired.length > 0 ? '#EF4444' : totalUrgent > 0 ? '#F59E0B' : '#22C55E'
   const heroNumber = tiers.expired.length + totalUrgent
 
-  // Top 5 tipos de certificados
   const topTypes = metrics.certs_by_type.slice(0, 5)
 
   return `<!DOCTYPE html>
@@ -35,14 +34,8 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
   th{background:#f8fafc;padding:8px;font-size:12px;color:#64748B;text-align:left;border-bottom:2px solid #e5e7eb}
   td{padding:8px;font-size:13px;border-bottom:1px solid #f1f5f9}
   tr:nth-child(even) td{background:#f8fafc}
-  .stats{display:flex;gap:0}
-  .stat{flex:1;text-align:center;padding:16px 8px;border-right:1px solid #e5e7eb}
-  .stat:last-child{border-right:none}
-  .stat .val{font-size:24px;font-weight:700;color:#1E293B}
-  .stat .lbl{font-size:11px;color:#64748B;margin-top:4px}
   .alert{padding:12px;border-radius:4px;margin-bottom:12px;font-size:13px}
   .alert-red{background:#FEF2F2;border-left:4px solid #EF4444}
-  .alert-yellow{background:#FFFBEB;border-left:4px solid #F59E0B}
   .alert-green{background:#F0FDF4;border-left:4px solid #22C55E}
   .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
   .ft{background:#F8FAFC;padding:16px 32px}
@@ -82,38 +75,36 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
   </div>
 
   <div class="body">
-    <!-- Alertas de certificados vencidos -->
+    <!-- Vencidos -->
     ${tiers.expired.length > 0 ? `
     <div class="alert alert-red">
-      <strong>🔴 ${tiers.expired.length} certificado${tiers.expired.length > 1 ? 's' : ''} vencido${tiers.expired.length > 1 ? 's' : ''}</strong> — ação necessária imediatamente.
+      <strong>🔴 ${tiers.expired.length} certificado${tiers.expired.length > 1 ? 's' : ''} vencido${tiers.expired.length > 1 ? 's' : ''}</strong> — precisa renovar agora.
     </div>
     ${buildCertTable(tiers.expired, '#EF4444', true)}` : ''}
 
     <!-- Vencendo em 1 dia -->
     ${tiers.day1.length > 0 ? `
-    <div class="alert alert-red">
-      <strong>🔴 ${tiers.day1.length} certificado${tiers.day1.length > 1 ? 's' : ''} vence${tiers.day1.length > 1 ? 'm' : ''} amanhã</strong>
-    </div>
+    <h3>🔴 Vence amanhã</h3>
     ${buildCertTable(tiers.day1, '#EF4444')}` : ''}
 
     <!-- Vencendo em 3 dias -->
     ${tiers.day3.length > 0 ? `
-    <h3>🟠 Vencendo em 2–3 dias</h3>
+    <h3>🟠 Vence em 2 a 3 dias</h3>
     ${buildCertTable(tiers.day3, '#EA580C')}` : ''}
 
     <!-- Vencendo em 7 dias -->
     ${tiers.day7.length > 0 ? `
-    <h3>🟡 Vencendo em 4–7 dias</h3>
+    <h3>🟡 Vence em 4 a 7 dias</h3>
     ${buildCertTable(tiers.day7, '#F59E0B')}` : ''}
 
     <!-- Vencendo em 15 dias -->
     ${tiers.day15.length > 0 ? `
-    <h3>🟡 Vencendo em 8–15 dias</h3>
+    <h3>🟡 Vence em 8 a 15 dias</h3>
     ${buildCertTable(tiers.day15, '#F59E0B')}` : ''}
 
     <!-- Vencendo em 30 dias -->
     ${tiers.day30.length > 0 ? `
-    <h3>🔵 Vencendo em 16–30 dias</h3>
+    <h3>🔵 Vence em 16 a 30 dias</h3>
     ${buildCertTable(tiers.day30, '#3B82F6')}` : ''}
 
     ${heroNumber === 0 && totalWarning === 0 ? `
@@ -137,7 +128,7 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
 
     <!-- Distribuição por tipo -->
     ${topTypes.length > 0 ? `
-    <h3>📋 Certificados por tipo</h3>
+    <h3>📋 Tipos de certificado mais comuns</h3>
     <table>
       <thead><tr><th>Tipo</th><th style="text-align:right">Quantidade</th></tr></thead>
       <tbody>
@@ -148,23 +139,6 @@ export function buildHREmail(metrics: WeekMetrics, config: ReportConfig, weekSta
         </tr>`).join('')}
       </tbody>
     </table>` : ''}
-
-    <!-- Resumo da semana -->
-    <h3>📊 Atividade da semana</h3>
-    <table>
-      <tr>
-        <td>Certificados processados</td>
-        <td style="text-align:right;font-weight:600">${metrics.certs_processed_week.toLocaleString('pt-BR')}</td>
-      </tr>
-      <tr>
-        <td>Certificados recebidos por e-mail</td>
-        <td style="text-align:right;font-weight:600">${metrics.emails_processed.toLocaleString('pt-BR')}</td>
-      </tr>
-      <tr>
-        <td>Alertas de vencimento configurados</td>
-        <td style="text-align:right;font-weight:600">30, 15, 7, 3, 1 e no dia</td>
-      </tr>
-    </table>
   </div>
   <div class="ft">${footer}</div>
 </div></body></html>`
