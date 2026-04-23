@@ -1,27 +1,14 @@
 -- Renomear roles: admin → manager, tk_master → admin
 -- Novo esquema: user (básico), manager (gerente), admin (acesso total)
+--
+-- ALTER TYPE RENAME VALUE atualiza automaticamente todos os dados existentes
+-- sem precisar de colunas temporárias ou DROP/ADD column.
 
--- 1. Adicionar 'manager' ao enum app_role
-ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'manager';
+-- 1. Renomear enum values (ordem importa: admin→manager primeiro para liberar o nome 'admin')
+ALTER TYPE public.app_role RENAME VALUE 'admin' TO 'manager';
+ALTER TYPE public.app_role RENAME VALUE 'tk_master' TO 'admin';
 
--- 2. Atualizar dados em user_roles (ordem importa: tk_master→admin primeiro para evitar conflito)
--- Precisamos usar uma coluna temporária porque não dá para fazer swap direto
-ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS role_new text;
-
-UPDATE public.user_roles SET role_new = CASE
-  WHEN role = 'tk_master' THEN 'admin'
-  WHEN role = 'admin' THEN 'manager'
-  ELSE role::text
-END;
-
--- Dropar a coluna role antiga e recriar com o enum atualizado
-ALTER TABLE public.user_roles DROP COLUMN role;
-ALTER TABLE public.user_roles ADD COLUMN role public.app_role NOT NULL DEFAULT 'user';
-UPDATE public.user_roles SET role = role_new::public.app_role;
-ALTER TABLE public.user_roles DROP COLUMN role_new;
-
--- 3. Atualizar profiles.role (legacy) — manager e admin mapeiam para 'admin' no enum user_role
--- user_role enum só tem 'admin' e 'user', então mantemos compatibilidade
+-- 2. Atualizar profiles.role (legacy) — manager e admin mapeiam para 'admin' no enum user_role
 UPDATE public.profiles p
 SET role = CASE
   WHEN EXISTS (
@@ -31,7 +18,7 @@ SET role = CASE
   ELSE 'user'::public.user_role
 END;
 
--- 4. Atualizar RLS policies que referenciam 'tk_master'
+-- 3. Atualizar RLS policies que referenciam 'tk_master'
 
 -- invites policies
 DROP POLICY IF EXISTS "invites_select_admin" ON public.invites;
@@ -146,20 +133,24 @@ CREATE POLICY "email_config_modify" ON public.email_config
   USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'))
   WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
 
--- certificate_email_accounts policies
-DROP POLICY IF EXISTS "cert_email_select" ON public.certificate_email_accounts;
-DROP POLICY IF EXISTS "cert_email_modify" ON public.certificate_email_accounts;
+-- certificate_email_accounts policies (if table exists)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'certificate_email_accounts') THEN
+    DROP POLICY IF EXISTS "cert_email_select" ON public.certificate_email_accounts;
+    DROP POLICY IF EXISTS "cert_email_modify" ON public.certificate_email_accounts;
 
-CREATE POLICY "cert_email_select" ON public.certificate_email_accounts
-  FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+    EXECUTE 'CREATE POLICY "cert_email_select" ON public.certificate_email_accounts
+      FOR SELECT TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))';
 
-CREATE POLICY "cert_email_modify" ON public.certificate_email_accounts
-  FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+    EXECUTE 'CREATE POLICY "cert_email_modify" ON public.certificate_email_accounts
+      FOR ALL TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))';
+  END IF;
+END $$;
 
--- 5. Atualizar função has_role para suportar os novos nomes (backward compat)
+-- 4. Atualizar função has_role
 CREATE OR REPLACE FUNCTION public.has_role(p_user_id uuid, p_role public.app_role)
 RETURNS boolean
 LANGUAGE sql
