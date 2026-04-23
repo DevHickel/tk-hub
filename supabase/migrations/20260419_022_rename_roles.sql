@@ -166,15 +166,6 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- 4. Atualizar função has_role
-CREATE OR REPLACE FUNCTION public.has_role(p_user_id uuid, p_role public.app_role)
-RETURNS boolean
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_roles
-    WHERE user_id = p_user_id AND role = p_role
-  );
-$$;
+-- 4. A função has_role não precisa ser alterada: ela recebe o enum app_role
+-- como parâmetro, e RENAME VALUE atualiza os valores automaticamente em todos
+-- os lugares que usam esse enum (incluindo argumentos de função).
