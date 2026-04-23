@@ -100,38 +100,54 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- report_config policies
-DROP POLICY IF EXISTS "report_config_rls" ON public.report_config;
-CREATE POLICY "report_config_rls" ON public.report_config
-  FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager')))
-  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager')));
+-- report_config policies (if table exists)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'report_config') THEN
+    DROP POLICY IF EXISTS "report_config_rls" ON public.report_config;
+    EXECUTE 'CREATE POLICY "report_config_rls" ON public.report_config
+      FOR ALL TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN (''admin'', ''manager'')))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN (''admin'', ''manager'')))';
+  END IF;
+END $$;
 
--- report_recipients policies
-DROP POLICY IF EXISTS "report_recipients_rls" ON public.report_recipients;
-CREATE POLICY "report_recipients_rls" ON public.report_recipients
-  FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager')))
-  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager')));
+-- report_recipients policies (if table exists)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'report_recipients') THEN
+    DROP POLICY IF EXISTS "report_recipients_rls" ON public.report_recipients;
+    EXECUTE 'CREATE POLICY "report_recipients_rls" ON public.report_recipients
+      FOR ALL TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN (''admin'', ''manager'')))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN (''admin'', ''manager'')))';
+  END IF;
+END $$;
 
--- weekly_report_log policies
-DROP POLICY IF EXISTS "weekly_report_log_rls" ON public.weekly_report_log;
-CREATE POLICY "weekly_report_log_rls" ON public.weekly_report_log
-  FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'manager')));
+-- weekly_report_log policies (if table exists)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'weekly_report_log') THEN
+    DROP POLICY IF EXISTS "weekly_report_log_rls" ON public.weekly_report_log;
+    EXECUTE 'CREATE POLICY "weekly_report_log_rls" ON public.weekly_report_log
+      FOR ALL TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role IN (''admin'', ''manager'')))';
+  END IF;
+END $$;
 
--- email_config policies
-DROP POLICY IF EXISTS "email_config_select" ON public.email_config;
-DROP POLICY IF EXISTS "email_config_modify" ON public.email_config;
+-- email_config policies (if table exists)
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'email_config') THEN
+    DROP POLICY IF EXISTS "email_config_select" ON public.email_config;
+    DROP POLICY IF EXISTS "email_config_modify" ON public.email_config;
 
-CREATE POLICY "email_config_select" ON public.email_config
-  FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+    EXECUTE 'CREATE POLICY "email_config_select" ON public.email_config
+      FOR SELECT TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))';
 
-CREATE POLICY "email_config_modify" ON public.email_config
-  FOR ALL TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'))
-  WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+    EXECUTE 'CREATE POLICY "email_config_modify" ON public.email_config
+      FOR ALL TO authenticated
+      USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))
+      WITH CHECK (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = ''admin''))';
+  END IF;
+END $$;
 
 -- certificate_email_accounts policies (if table exists)
 DO $$ BEGIN
