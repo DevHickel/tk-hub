@@ -44,15 +44,6 @@ const app = new Hono<{ Variables: AppVariables }>()
 const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!)
 const supabaseAuth  = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
 
-// ── Debug: log toda request que chega ao Hono (raiz do problema 405) ─────────
-app.use('*', async (c, next) => {
-  const path = c.req.path
-  if (path.startsWith('/api/')) {
-    console.log(`[req] ${c.req.method} ${path} ua=${c.req.header('user-agent')?.slice(0, 40)}`)
-  }
-  await next()
-})
-
 // ── Headers de segurança (security/SKILL.md §6) ──────────────────────────────
 app.use('*', secureHeaders())
 
