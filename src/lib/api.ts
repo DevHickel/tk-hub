@@ -256,4 +256,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+
+  // ── Cadastro ────────────────────────────────────────────────────────────────
+  register: (input: { token: string; password: string; full_name: string; phone?: string }) =>
+    request<{ success: true }>('/api/register', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 }

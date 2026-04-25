@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Logo } from '@/components/Logo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface Invite {
@@ -143,49 +144,32 @@ export default function Register() {
 
     setLoading(true);
 
-    const { data: signUpData, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone,
-        },
-      },
-    });
+    try {
+      await api.register({
+        token: inviteToken!,
+        password,
+        full_name: fullName,
+        phone,
+      });
 
-    if (error) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        toast({ title: 'Conta criada', description: 'Faça login para continuar.' });
+        navigate('/login');
+        return;
+      }
+
+      toast({ title: 'Bem-vindo!', description: 'Conta criada com sucesso.' });
+      navigate('/chat');
+    } catch (err) {
       toast({
         variant: 'destructive',
         title: 'Erro ao criar conta',
-        description: error.message,
+        description: err instanceof Error ? err.message : 'Tente novamente.',
       });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Update profile with full_name (display name)
-    if (signUpData.user) {
-      await supabase
-        .from('profiles')
-        .update({ full_name: fullName })
-        .eq('id', signUpData.user.id);
-    }
-
-    // Mark invite as accepted
-    if (invite) {
-      await supabase
-        .from('invites')
-        .update({ status: 'accepted' })
-        .eq('id', invite.id);
-    }
-
-    toast({
-      title: 'Conta criada!',
-      description: 'Verifique seu email para confirmar a conta.',
-    });
-    navigate('/login');
-    setLoading(false);
   };
 
   if (isValidating) {
