@@ -48,14 +48,12 @@ invitesRoutes.post('/invites', inviteRateLimiter, zValidator('json', createInvit
       return c.json({ error: 'Já existe um convite pendente para este e-mail.' }, 409)
     }
 
-    // Verificar se já existe usuário com esse e-mail
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
+    // Verificar se já existe usuário com esse e-mail — checar em auth.users
+    // direto (profiles.email pode estar NULL pra contas legadas)
+    const { data: emailExists } = await supabase
+      .rpc('email_exists_in_auth', { p_email: email })
 
-    if (existingUser) {
+    if (emailExists) {
       return c.json({ error: 'Já existe um usuário cadastrado com este e-mail.' }, 409)
     }
 
