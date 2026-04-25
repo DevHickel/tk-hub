@@ -19,6 +19,8 @@ import { ptBR } from 'date-fns/locale';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
 import { logActivity, ACTION_LABELS } from '@/lib/activity';
+import { api } from '@/lib/api';
+import { EmailConfigTab } from '@/components/admin/EmailConfigTab';
 
 type AppRole = 'admin' | 'manager' | 'user';
 
@@ -255,32 +257,15 @@ export default function Admin() {
     setIsSendingInvite(true);
 
     try {
-      // Call n8n webhook directly - all invite logic is handled by n8n
-      const response = await fetch('https://n8n.vetorix.com.br/webhook/convite-usuario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: inviteEmail,
-          invitedBy: user?.id,
-          inviterEmail: profile?.email,
-          origin: window.location.origin,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Webhook request failed');
-      }
-
-      // With no-cors mode, we can't read the response
-      // Show success message and let user verify in n8n
-      toast.success('Convite enviado para processamento! Verifique o n8n.');
+      await api.createInvite(inviteEmail.trim());
+      toast.success('Convite enviado!');
       if (user) await logActivity(user.id, 'invite_sent', { email: inviteEmail });
       setInviteEmail('');
       fetchInvites();
     } catch (err) {
       console.error('Error sending invite:', err);
-      toast.error('Erro ao enviar convite');
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar convite';
+      toast.error(msg);
     } finally {
       setIsSendingInvite(false);
     }
@@ -402,7 +387,7 @@ export default function Admin() {
           </div>
         ) : (
         <Tabs defaultValue={isAdmin ? "users" : "invites"} className="space-y-6">
-          <TabsList className={`grid w-full max-w-md ${isAdmin ? 'grid-cols-3' : 'grid-cols-1'}`}>
+          <TabsList className={`grid w-full ${isAdmin ? 'max-w-2xl grid-cols-4' : 'max-w-md grid-cols-1'}`}>
             {isAdmin && (
               <TabsTrigger value="users" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -417,6 +402,12 @@ export default function Admin() {
               <TabsTrigger value="logs" className="flex items-center gap-2">
                 <Activity className="h-4 w-4" />
                 Logs
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="email" className="flex items-center gap-2">
+                <Mail className="h-4 w-4" />
+                E-mail (SMTP)
               </TabsTrigger>
             )}
           </TabsList>
@@ -660,7 +651,18 @@ export default function Admin() {
             </Card>
           </TabsContent>
 
-
+          {isAdmin && (
+            <TabsContent value="email">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuração de E-mail (SMTP)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <EmailConfigTab canEdit={isAdmin} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
         </Tabs>
         )}

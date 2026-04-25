@@ -249,4 +249,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(config),
     }),
+
+  // ── Convites ────────────────────────────────────────────────────────────────
+  createInvite: (email: string) =>
+    request<{ id: string; email: string; token: string; expires_at: string }>('/api/invites', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 }

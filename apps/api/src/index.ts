@@ -16,6 +16,7 @@ import { ragRoutes } from './routes/rag.routes.js'
 import { dmsRoutes } from './routes/dms.routes.js'
 import { reportsRoutes } from './routes/reports.routes.js'
 import { certificatesRoutes } from './routes/certificates.routes.js'
+import { invitesRoutes } from './routes/invites.routes.js'
 import { setupWorkers } from './workers/index.js'
 import { setupCron } from './services/cron.service.js'
 import { setupReportCron } from './services/reports/report.cron.js'
@@ -105,6 +106,7 @@ app.route('/api', ragRoutes)
 app.route('/api', dmsRoutes)
 app.route('/api', reportsRoutes)
 app.route('/api', certificatesRoutes)
+app.route('/api', invitesRoutes)
 
 // ── Iniciar workers BullMQ + Crons ────────────────────────────────────────────
 setupWorkers()
