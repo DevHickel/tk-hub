@@ -44,6 +44,15 @@ const app = new Hono<{ Variables: AppVariables }>()
 const supabaseAdmin = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!)
 const supabaseAuth  = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!)
 
+// ── Debug: log toda request que chega ao Hono (raiz do problema 405) ─────────
+app.use('*', async (c, next) => {
+  const path = c.req.path
+  if (path.startsWith('/api/')) {
+    console.log(`[req] ${c.req.method} ${path} ua=${c.req.header('user-agent')?.slice(0, 40)}`)
+  }
+  await next()
+})
+
 // ── Headers de segurança (security/SKILL.md §6) ──────────────────────────────
 app.use('*', secureHeaders())
 
@@ -109,6 +118,12 @@ app.route('/api', reportsRoutes)
 app.route('/api', certificatesRoutes)
 app.route('/api', invitesRoutes)
 app.route('/api', registerRoutes)
+
+// ── Catch-all para debug do mistério do 405 ──────────────────────────────────
+app.notFound((c) => {
+  console.log(`[404] ${c.req.method} ${c.req.path} — rota não encontrada no Hono`)
+  return c.json({ error: 'Not Found', method: c.req.method, path: c.req.path }, 404)
+})
 
 // ── Iniciar workers BullMQ + Crons ────────────────────────────────────────────
 setupWorkers()
