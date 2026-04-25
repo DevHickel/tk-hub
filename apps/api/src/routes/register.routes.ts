@@ -42,7 +42,15 @@ registerRoutes.post('/register', registerRateLimiter, zValidator('json', registe
       email_confirm: true,
       user_metadata: { full_name, phone },
     })
-    if (createError) throw createError
+    if (createError) {
+      const msg = createError.message ?? ''
+      const isDuplicate = /already (been )?registered/i.test(msg) || (createError as { status?: number }).status === 422
+      if (isDuplicate) {
+        await supabase.from('invites').update({ status: 'accepted' }).eq('token', token)
+        return c.json({ error: 'Esta conta já existe. Faça login.' }, 409)
+      }
+      throw createError
+    }
     const userId = created.user!.id
 
     await supabase.from('profiles').update({ full_name, phone }).eq('id', userId)

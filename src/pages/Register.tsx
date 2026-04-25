@@ -162,10 +162,16 @@ export default function Register() {
       toast({ title: 'Bem-vindo!', description: 'Conta criada com sucesso.' });
       navigate('/chat');
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Tente novamente.';
+      if (/já existe|Faça login/i.test(msg)) {
+        toast({ title: 'Conta já existe', description: 'Faça login para continuar.' });
+        navigate('/login');
+        return;
+      }
       toast({
         variant: 'destructive',
         title: 'Erro ao criar conta',
-        description: err instanceof Error ? err.message : 'Tente novamente.',
+        description: msg,
       });
     } finally {
       setLoading(false);

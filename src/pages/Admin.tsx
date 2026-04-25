@@ -175,6 +175,15 @@ export default function Admin() {
     fetchData();
   }, [isManager, authLoading, navigate]);
 
+  useEffect(() => {
+    if (!isManager) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchInvites();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isManager]);
+
   const fetchData = async () => {
     setIsLoading(true);
     await Promise.all([fetchUsers(), fetchActivityLogs(), fetchInvites()]);
