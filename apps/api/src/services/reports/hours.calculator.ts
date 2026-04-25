@@ -61,6 +61,10 @@ export interface WeekMetrics {
   feedback_negative: number
   avg_tokens_per_query: number
   total_tokens_week: number
+  // Bug reports (semana)
+  bug_reports_total: number
+  bug_reports_pending: number
+  bug_reports_fixed: number
 }
 
 export interface HoursSaved {

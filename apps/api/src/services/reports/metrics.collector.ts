@@ -30,6 +30,8 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
     // Usuários e feedback
     activeUsersRes,
     feedbackRes,
+    // Bug reports
+    bugReportsRes,
   ] = await Promise.all([
     // ── Métricas gerais ──────────────────────────────────────────────────
     supabase
@@ -140,6 +142,13 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
       .select('score')
       .gte('created_at', start)
       .lte('created_at', end),
+
+    // ── Bug reports (semana) ─────────────────────────────────────────────
+    supabase
+      .from('bug_reports')
+      .select('status')
+      .gte('created_at', start)
+      .lte('created_at', end),
   ])
 
   // ── Processar métricas gerais ──────────────────────────────────────────────
@@ -243,6 +252,12 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
   const ragQueries = ragQueriesRes.count ?? 0
   const avg_tokens_per_query = ragQueries > 0 ? Math.round(total_tokens_week / ragQueries) : 0
 
+  // ── Bug reports da semana ──────────────────────────────────────────────────
+  const bugRows = (bugReportsRes.data ?? []) as Array<{ status: string | null }>
+  const bug_reports_total = bugRows.length
+  const bug_reports_fixed = bugRows.filter((r) => r.status === 'fixed').length
+  const bug_reports_pending = bug_reports_total - bug_reports_fixed
+
   return {
     rag_queries:      ragQueries,
     rag_docs_total:   (ragDocsTotalRes.data as unknown as number) ?? 0,
@@ -270,6 +285,9 @@ export async function collectWeekMetrics(weekStart: Date, weekEnd: Date): Promis
     feedback_negative,
     avg_tokens_per_query,
     total_tokens_week,
+    bug_reports_total,
+    bug_reports_pending,
+    bug_reports_fixed,
   }
 }
 

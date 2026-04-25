@@ -118,6 +118,14 @@ export function buildITEmail(
       <tr><td>Erros na semana</td><td style="color:${metrics.docs_error_week > 0 ? '#EF4444' : 'inherit'}">${metrics.docs_error_week}</td></tr>
       <tr><td>Travados em processamento</td><td style="color:${metrics.docs_processing > 0 ? '#F59E0B' : 'inherit'}">${metrics.docs_processing}</td></tr>
     </table>
+
+    <!-- Bug reports -->
+    <h3>🐞 Reports de bug</h3>
+    <table>
+      <tr><td>Reports recebidos na semana</td><td>${metrics.bug_reports_total}</td></tr>
+      <tr><td>Pendentes</td><td style="color:${metrics.bug_reports_pending > 0 ? '#F59E0B' : 'inherit'}">${metrics.bug_reports_pending}</td></tr>
+      <tr><td>Corrigidos</td><td style="color:${metrics.bug_reports_fixed > 0 ? '#22C55E' : 'inherit'}">${metrics.bug_reports_fixed}</td></tr>
+    </table>
   </div>
   <div class="ft">${footer}</div>
 </div></body></html>`
