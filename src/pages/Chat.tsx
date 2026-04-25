@@ -197,6 +197,11 @@ export default function Chat() {
         aiResponse = data.response || aiResponse;
         chatHistoryId = data.chat_history_id ?? null;
         sources = Array.isArray(data.sources) ? data.sources : [];
+      } else {
+        const errBody = await response.json().catch(() => ({}));
+        const errMsg = (errBody as { error?: string }).error ?? `HTTP ${response.status}`;
+        console.error('[chat] /api/chat falhou:', response.status, errBody);
+        aiResponse = `Erro: ${errMsg} (status ${response.status})`;
       }
 
       const { data: aiMsg } = await supabase
