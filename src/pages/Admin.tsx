@@ -21,6 +21,7 @@ import { useDeleteWithConfirmation } from '@/hooks/useDeleteWithConfirmation';
 import { logActivity, ACTION_LABELS } from '@/lib/activity';
 import { api } from '@/lib/api';
 import { EmailConfigTab } from '@/components/admin/EmailConfigTab';
+import { InboxConfigTab } from '@/components/admin/InboxConfigTab';
 
 type AppRole = 'admin' | 'manager' | 'user';
 
@@ -407,7 +408,7 @@ export default function Admin() {
             {isAdmin && (
               <TabsTrigger value="email" className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
-                E-mail (SMTP)
+                E-mail
               </TabsTrigger>
             )}
           </TabsList>
@@ -652,13 +653,21 @@ export default function Admin() {
           </TabsContent>
 
           {isAdmin && (
-            <TabsContent value="email">
+            <TabsContent value="email" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Configuração de E-mail (SMTP)</CardTitle>
+                  <CardTitle>Envio de e-mails (SMTP)</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <EmailConfigTab canEdit={isAdmin} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Caixas monitoradas (IMAP)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <InboxConfigTab canEdit={isAdmin} />
                 </CardContent>
               </Card>
             </TabsContent>
