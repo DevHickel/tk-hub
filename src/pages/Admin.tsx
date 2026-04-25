@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -653,10 +653,15 @@ export default function Admin() {
           </TabsContent>
 
           {isAdmin && (
-            <TabsContent value="email" className="space-y-6">
+            <TabsContent value="email" className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               <Card>
                 <CardHeader>
                   <CardTitle>Envio de e-mails (SMTP)</CardTitle>
+                  <CardDescription>
+                    Conta que o sistema usa pra <strong>enviar</strong> e-mails — relatórios
+                    semanais, convites de novos usuários e alertas de certificados partem
+                    daqui. Configure uma vez com Gmail, Outlook ou SMTP próprio.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <EmailConfigTab canEdit={isAdmin} />
@@ -665,6 +670,11 @@ export default function Admin() {
               <Card>
                 <CardHeader>
                   <CardTitle>Caixas monitoradas (IMAP)</CardTitle>
+                  <CardDescription>
+                    Contas que o sistema <strong>lê</strong> automaticamente (a cada 10 min)
+                    procurando certificados anexados. Qualquer PDF, JPG ou PNG recebido vira
+                    um certificado extraído pela IA e aparece em Documentos.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <InboxConfigTab canEdit={isAdmin} />
