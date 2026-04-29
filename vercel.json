@@ -1,9 +1,0 @@
-{
-  "redirects": [
-    {
-      "source": "/:path*",
-      "destination": "https://tkhub.vetorix.com.br/:path*",
-      "permanent": true
-    }
-  ]
-}

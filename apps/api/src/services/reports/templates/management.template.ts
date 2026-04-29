@@ -97,7 +97,7 @@ export function buildManagementEmail(
     <table>
       <tr><td>Perguntas respondidas pelo assistente</td><td>${metrics.rag_queries}</td></tr>
       <tr><td>Certificados cadastrados automaticamente</td><td>${metrics.certs_processed_week}</td></tr>
-      <tr><td>Documentos adicionados à base de conhecimento</td><td>${metrics.rag_docs_total}</td></tr>
+      <tr><td>Documentos adicionados à base de conhecimento</td><td>${metrics.rag_docs_week}</td></tr>
     </table>
 
     <!-- Quanto custou e quanto retornou -->
