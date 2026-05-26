@@ -46,7 +46,7 @@ export default function Login() {
           <img
             src={tkLogoLight}
             alt="TK Solution"
-            className="h-20 w-auto object-contain"
+            className="h-40 w-auto object-contain"
           />
         </div>
 
