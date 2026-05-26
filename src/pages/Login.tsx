@@ -6,43 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-
-// Logo TK Solution em SVG — fiel ao manual de identidade visual
-function TKLogoSVG({ color = '#FFFFFF' }: { color?: string }) {
-  return (
-    <svg
-      viewBox="0 0 220 200"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="w-full h-full"
-    >
-      {/* T — barra horizontal + stem vertical */}
-      <rect x="10" y="20" width="100" height="20" fill={color} />
-      <rect x="45" y="40" width="22" height="110" fill={color} />
-
-      {/* K — stem + braço superior + braço inferior */}
-      <rect x="120" y="20" width="20" height="130" fill={color} />
-      {/* Braço superior */}
-      <polygon points="140,20 210,20 210,42 158,90 140,90" fill={color} />
-      {/* Braço inferior */}
-      <polygon points="140,88 158,88 210,136 210,158 140,150" fill={color} />
-
-      {/* SOLUTION */}
-      <text
-        x="110"
-        y="188"
-        textAnchor="middle"
-        fill={color}
-        fontSize="20"
-        fontWeight="700"
-        fontFamily="'Leelawadee UI', 'Inter', sans-serif"
-        letterSpacing="5"
-      >
-        SOLUTION
-      </text>
-    </svg>
-  );
-}
+import { Logo } from '@/components/Logo';
+import tkLogoLight from '@/assets/tk-logo-light.png';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -76,9 +41,13 @@ export default function Login() {
     <div className="min-h-screen flex">
       {/* Painel esquerdo — identidade TK Solution (#000000 com logo branca) */}
       <div className="hidden lg:flex lg:w-1/2 bg-black flex-col items-center justify-center p-12 relative overflow-hidden">
-        {/* Logo */}
-        <div className="w-52 h-52 mb-8">
-          <TKLogoSVG color="#FFFFFF" />
+        {/* Logo (sempre a versão clara, painel é forçado preto) */}
+        <div className="mb-8">
+          <img
+            src={tkLogoLight}
+            alt="TK Solution"
+            className="h-20 w-auto object-contain"
+          />
         </div>
 
         {/* Tagline */}
@@ -92,9 +61,9 @@ export default function Login() {
 
       {/* Painel direito — formulário */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white dark:bg-[#0d0d0d]">
-        {/* Logo mobile (só aparece em telas pequenas) */}
-        <div className="lg:hidden w-28 h-28 mb-8 bg-black rounded-xl p-4">
-          <TKLogoSVG color="#FFFFFF" />
+        {/* Logo mobile (só aparece em telas pequenas) — respeita tema */}
+        <div className="lg:hidden mb-8">
+          <Logo size="lg" />
         </div>
 
         <div className="w-full max-w-sm">
