@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import {
   FileText,
@@ -151,12 +152,15 @@ export default function Dashboard() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold">Dashboard</h1>
-            <p className="text-xs text-muted-foreground">
-              Olá, {profile?.full_name?.split(' ')[0] ?? 'usuário'}
-            </p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Dashboard</h1>
+              <p className="text-xs text-muted-foreground truncate">
+                Olá, {profile?.full_name?.split(' ')[0] ?? 'usuário'}
+              </p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

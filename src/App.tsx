@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { MobileNavProvider } from "@/contexts/MobileNavContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { RequireManager } from "@/components/RequireAdmin";
 import Login from "./pages/Login";
@@ -38,24 +39,26 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<RootRedirect />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              {/* Manager+ routes */}
-              <Route path="/dashboard" element={<RequireManager><Dashboard /></RequireManager>} />
-              <Route path="/documents" element={<RequireManager><Documents /></RequireManager>} />
-              <Route path="/admin" element={<RequireManager><Admin /></RequireManager>} />
-              <Route path="/report-settings" element={<RequireManager><ReportSettings /></RequireManager>} />
-              {/* All authenticated users */}
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/bug-report" element={<BugReport />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <MobileNavProvider>
+              <Routes>
+                <Route path="/" element={<RootRedirect />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                {/* Manager+ routes */}
+                <Route path="/dashboard" element={<RequireManager><Dashboard /></RequireManager>} />
+                <Route path="/documents" element={<RequireManager><Documents /></RequireManager>} />
+                <Route path="/admin" element={<RequireManager><Admin /></RequireManager>} />
+                <Route path="/report-settings" element={<RequireManager><ReportSettings /></RequireManager>} />
+                {/* All authenticated users */}
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/bug-report" element={<BugReport />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </MobileNavProvider>
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>

@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { User, Moon, Lock, Save, Camera, Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -142,8 +143,9 @@ export default function Settings() {
   const handleResetPasswordRequest = async () => {
     if (!user?.email) return;
 
+    const appUrl = import.meta.env.VITE_APP_URL ?? window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     });
 
     if (error) {
@@ -168,10 +170,13 @@ export default function Settings() {
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold">Configurações</h1>
-            <p className="text-xs text-muted-foreground">Perfil, segurança e preferências</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Configurações</h1>
+              <p className="text-xs text-muted-foreground truncate">Perfil, segurança e preferências</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

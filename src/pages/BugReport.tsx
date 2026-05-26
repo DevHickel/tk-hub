@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { Bug, Send, Upload, X, List, Image as ImageIcon, Trash2, CheckCircle, Clock, Search, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -263,10 +264,13 @@ export default function BugReport() {
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold">Reportar Bug</h1>
-            <p className="text-xs text-muted-foreground">Relate problemas encontrados no sistema</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Reportar Bug</h1>
+              <p className="text-xs text-muted-foreground truncate">Relate problemas encontrados no sistema</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

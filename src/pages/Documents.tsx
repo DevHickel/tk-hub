@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -131,10 +132,13 @@ export default function Documents() {
     <div className="flex h-screen bg-background">
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
-          <div>
-            <h1 className="text-lg font-semibold">Documentos</h1>
-            <p className="text-xs text-muted-foreground">Gerencie certificados e documentos RAG</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Documentos</h1>
+              <p className="text-xs text-muted-foreground truncate">Gerencie certificados e documentos RAG</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

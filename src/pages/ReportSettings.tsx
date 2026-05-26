@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { api, type ReportConfig, type ReportRecipient } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { AppSidebar } from '@/components/AppSidebar'
+import { MobileNavTrigger } from '@/components/MobileNavTrigger'
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -656,10 +657,13 @@ export default function ReportSettings() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold">Relatórios</h1>
-            <p className="text-xs text-muted-foreground">Destinatários, benchmarks e preferências</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Relatórios</h1>
+              <p className="text-xs text-muted-foreground truncate">Destinatários, benchmarks e preferências</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -351,10 +352,13 @@ export default function Chat() {
 
       {/* Chat area */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6 shrink-0">
-          <div>
-            <h1 className="text-lg font-semibold">Assistente IA</h1>
-            <p className="text-xs text-muted-foreground">Tkzinho — powered by IA</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Assistente IA</h1>
+              <p className="text-xs text-muted-foreground truncate">Tkzinho — powered by IA</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>

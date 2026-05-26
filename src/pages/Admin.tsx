@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
+import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
 import { Users, Activity, Search, Trash2, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -282,7 +283,7 @@ export default function Admin() {
   };
 
   const copyInviteLink = (token: string, email: string) => {
-    const baseUrl = window.location.origin;
+    const baseUrl = import.meta.env.VITE_APP_URL ?? window.location.origin;
     const link = `${baseUrl}/register?token=${token}&email=${encodeURIComponent(email)}`;
     navigator.clipboard.writeText(link);
     toast.success('Link copiado para a área de transferência!');
@@ -382,10 +383,13 @@ export default function Admin() {
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={schedulePendingCollapse} />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b bg-card flex items-center justify-between px-6">
-          <div>
-            <h1 className="text-lg font-semibold">Administração</h1>
-            <p className="text-xs text-muted-foreground">Usuários, convites e atividade</p>
+        <header className="h-14 border-b bg-card flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <MobileNavTrigger />
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold truncate">Administração</h1>
+              <p className="text-xs text-muted-foreground truncate">Usuários, convites e atividade</p>
+            </div>
           </div>
           <ThemeToggle />
         </header>
