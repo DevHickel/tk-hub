@@ -33,8 +33,9 @@ export default function ForgotPassword() {
     e.preventDefault();
     setLoading(true);
 
+    const appUrl = import.meta.env.VITE_APP_URL ?? window.location.origin;
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     });
 
     if (error) {
@@ -79,6 +80,9 @@ export default function ForgotPassword() {
               <div className="space-y-4">
                 <p className="text-center text-muted-foreground">
                   Enviamos um link de recuperação para <strong>{email}</strong>
+                </p>
+                <p className="text-center text-xs text-muted-foreground/80 px-2">
+                  ⚠️ Use somente o <strong>último email</strong> recebido. Pedir o reset novamente invalida os links anteriores.
                 </p>
                 <Button
                   variant="outline"

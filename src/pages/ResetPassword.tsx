@@ -32,16 +32,29 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [hashError, setHashError] = useState<{ code: string; description: string } | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
+    // Capturar erros vindos no hash da URL (#error=...&error_code=...&error_description=...)
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const errorCode = params.get('error_code');
+    if (errorCode) {
+      setHashError({
+        code: errorCode,
+        description: decodeURIComponent(params.get('error_description') ?? '').replace(/\+/g, ' '),
+      });
+      setCheckingSession(false);
+      return;
+    }
+
     // Listen for auth state changes (handles the recovery token from URL)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setCheckingSession(false);
-        
+
         if (event === 'PASSWORD_RECOVERY') {
           // User arrived via password recovery link
           setSession(session);
@@ -100,26 +113,48 @@ export default function ResetPassword() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({
+    const { data: updateData, error: updateError } = await supabase.auth.updateUser({
       password,
     });
 
-    if (error) {
+    if (updateError) {
       toast({
         variant: 'destructive',
         title: 'Erro ao atualizar senha',
-        description: error.message,
+        description: updateError.message,
       });
-    } else {
-      toast({
-        title: 'Senha atualizada!',
-        description: 'Sua senha foi alterada com sucesso.',
-      });
-      // Sign out to force re-login with new password
-      await supabase.auth.signOut();
-      navigate('/login');
+      setLoading(false);
+      return;
     }
 
+    const email = updateData.user?.email;
+    if (!email) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Email não encontrado na sessão de recuperação.',
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Verificar: a senha realmente foi salva? Tenta entrar com ela.
+    await supabase.auth.signOut();
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      toast({
+        variant: 'destructive',
+        title: 'Senha não foi salva',
+        description: 'O servidor retornou sucesso mas a nova senha não está funcionando. Verifique configurações do Supabase (Auth Hooks, triggers em auth.users) ou contate o admin.',
+        duration: 10000,
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Sucesso real: usuário está logado com a nova senha
+    toast({ title: 'Senha atualizada!', description: 'Você já está logado.' });
+    navigate('/');
     setLoading(false);
   };
 
@@ -132,8 +167,16 @@ export default function ResetPassword() {
     );
   }
 
-  // Show error if no session
-  if (!session) {
+  // Show error if no session OR if URL has an error code
+  if (!session || hashError) {
+    const isOtpExpired = hashError?.code === 'otp_expired';
+    const title = isOtpExpired ? 'Link Inválido' : 'Link Expirado';
+    const description = isOtpExpired
+      ? 'Este link expirou ou já foi substituído por um mais recente. Solicite outro abaixo e use somente o último email recebido.'
+      : hashError?.description
+        ? hashError.description
+        : 'O link de recuperação de senha expirou ou é inválido. Por favor, solicite um novo link.';
+
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <div className="absolute top-4 right-4">
@@ -145,10 +188,8 @@ export default function ResetPassword() {
               <div className="flex justify-center">
                 <Logo size="lg" />
               </div>
-              <CardTitle className="text-2xl">Link Expirado</CardTitle>
-              <CardDescription>
-                O link de recuperação de senha expirou ou é inválido. Por favor, solicite um novo link.
-              </CardDescription>
+              <CardTitle className="text-2xl">{title}</CardTitle>
+              <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent>
               <Button className="w-full" onClick={() => navigate('/forgot-password')}>
