@@ -69,6 +69,9 @@ import {
   RefreshCw,
   Sparkles,
   Plus,
+  Pencil,
+  Save,
+  X as XIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
@@ -206,6 +209,19 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
     conteudo_programatico: '',
     file_name: '',
     file_url: '',
+  });
+  // Detail-panel edit state
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    employee_name: '',
+    course_name: '',
+    completion_date: '',
+    expiry_date: '',
+    hours: '',
+    validade_meses: '',
+    nr_codes: '',
+    conteudo_programatico: '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const manualFileInputRef = useRef<HTMLInputElement>(null);
@@ -562,6 +578,87 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
       toast.error(`Erro ao salvar: ${msg}`);
     } finally {
       setManualSaving(false);
+    }
+  };
+
+  const startEdit = (cert: Certificate) => {
+    setEditForm({
+      employee_name: cert.employee_name ?? '',
+      course_name: cert.course_name ?? '',
+      completion_date: cert.completion_date ?? '',
+      expiry_date: cert.expiry_date ?? '',
+      hours: cert.hours != null ? String(cert.hours) : '',
+      validade_meses: cert.validade_meses != null ? String(cert.validade_meses) : '',
+      nr_codes: (cert.nr_codes ?? []).join(', '),
+      conteudo_programatico: cert.conteudo_programatico ?? '',
+    });
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const handleEditSave = async () => {
+    if (!selected || !user) return;
+    if (!editForm.employee_name.trim() || !editForm.course_name.trim() || !editForm.completion_date) {
+      toast.error('Colaborador, curso e data de conclusão são obrigatórios.');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      // Aplicar mesmas regras de validade do manual save / worker
+      let validadeMeses = editForm.validade_meses ? parseInt(editForm.validade_meses, 10) : null;
+      let expiryDate = editForm.expiry_date || null;
+      const completionDate = editForm.completion_date;
+      if (validadeMeses == null && !expiryDate) validadeMeses = 12;
+      if (!expiryDate && completionDate && validadeMeses) {
+        const d = new Date(completionDate + 'T00:00:00Z');
+        d.setUTCMonth(d.getUTCMonth() + validadeMeses);
+        expiryDate = d.toISOString().slice(0, 10);
+      }
+      if (validadeMeses == null && expiryDate && completionDate) {
+        const start = new Date(completionDate + 'T00:00:00Z');
+        const end = new Date(expiryDate + 'T00:00:00Z');
+        const months = (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth());
+        if (months > 0) validadeMeses = months;
+      }
+
+      const nrCodes = editForm.nr_codes
+        .split(/[,;\s]+/)
+        .map(s => s.trim().toUpperCase().replace(/^NR\s*-?\s*/i, 'NR-'))
+        .filter(s => /^NR-\d+$/.test(s));
+
+      const updates = {
+        employee_name: editForm.employee_name.trim(),
+        course_name: editForm.course_name.trim(),
+        completion_date: completionDate || null,
+        expiry_date: expiryDate,
+        hours: editForm.hours ? Number(editForm.hours) : null,
+        validade_meses: validadeMeses,
+        nr_codes: nrCodes.length > 0 ? nrCodes : null,
+        conteudo_programatico: editForm.conteudo_programatico.trim() || null,
+      };
+
+      const { error } = await supabase
+        .from('processed_certificates')
+        .update(updates)
+        .eq('id', selected.id);
+      if (error) throw error;
+
+      // Refletir localmente sem precisar de refetch full
+      const updatedCert: Certificate = { ...selected, ...updates };
+      setSelected(updatedCert);
+      setCerts(prev => prev.map(c => (c.id === selected.id ? updatedCert : c)));
+      toast.success('Certificado atualizado.');
+      setEditing(false);
+    } catch (err) {
+      console.error(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Erro ao salvar: ${msg}`);
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -995,7 +1092,15 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
       </Dialog>
 
       {/* Detail sheet */}
-      <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+      <Sheet
+        open={!!selected}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelected(null);
+            setEditing(false);
+          }
+        }}
+      >
         <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
           {selected && (
             <>
@@ -1003,81 +1108,199 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                 <SheetTitle>{selected.employee_name ?? 'Certificado'}</SheetTitle>
                 <SheetDescription>{selected.course_name ?? selected.file_name ?? '—'}</SheetDescription>
               </SheetHeader>
-              <div className="mt-6 space-y-4">
-                <DetailRow label="Colaborador" value={selected.employee_name} />
-                <DetailRow label="Curso / Documento" value={selected.course_name} />
-                {selected.nr_codes && selected.nr_codes.length > 0 && (
-                  <div className="flex items-center justify-between py-2 border-b">
-                    <span className="text-sm text-muted-foreground">Treinamento (NR)</span>
-                    <div className="flex flex-wrap gap-1 justify-end">
-                      {selected.nr_codes.map(nr => (
-                        <Badge key={nr} variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
-                          {nr}
-                        </Badge>
-                      ))}
+
+              {editing ? (
+                <div className="mt-6 space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-employee">Colaborador</Label>
+                    <Input
+                      id="edit-employee"
+                      value={editForm.employee_name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, employee_name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-course">Curso / Treinamento</Label>
+                    <Input
+                      id="edit-course"
+                      value={editForm.course_name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, course_name: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-nr">Normas (NR)</Label>
+                    <Input
+                      id="edit-nr"
+                      value={editForm.nr_codes}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, nr_codes: e.target.value }))}
+                      placeholder="Ex: NR-6, NR-33"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Separe por vírgula ou espaço.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-completion">Conclusão</Label>
+                      <Input
+                        id="edit-completion"
+                        type="date"
+                        value={editForm.completion_date}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, completion_date: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-expiry">Vencimento</Label>
+                      <Input
+                        id="edit-expiry"
+                        type="date"
+                        value={editForm.expiry_date}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, expiry_date: e.target.value }))}
+                      />
                     </div>
                   </div>
-                )}
-                <DetailRow label="Arquivo" value={selected.file_name} />
-                <DetailRow label="Conclusão" value={selected.completion_date ? format(new Date(selected.completion_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
-                <DetailRow label="Vencimento" value={selected.expiry_date ? format(new Date(selected.expiry_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
-                <DetailRow label="Validade" value={selected.validade_meses ? formatValidade(selected.validade_meses) : null} />
-                <DetailRow label="Carga horária" value={selected.hours ? `${selected.hours}h` : null} />
-                <div className="flex items-center justify-between py-2 border-b">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={CERT_STATUS[selected.status ?? '']?.variant ?? 'outline'}>
-                      {CERT_STATUS[selected.status ?? '']?.label ?? selected.status ?? '—'}
-                    </Badge>
-                    {selected.source === 'manual' && (
-                      <Badge variant="outline" className="text-blue-500 border-blue-500/50">
-                        Manual
-                      </Badge>
-                    )}
-                    {selected.renewed_at && (
-                      <span className="text-xs text-muted-foreground">
-                        Atualizado em {format(new Date(selected.renewed_at), 'dd/MM/yyyy')}
-                      </span>
-                    )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-hours">Carga horária</Label>
+                      <Input
+                        id="edit-hours"
+                        type="number"
+                        min="1"
+                        value={editForm.hours}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, hours: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="edit-validade">Validade (meses)</Label>
+                      <Input
+                        id="edit-validade"
+                        type="number"
+                        min="1"
+                        value={editForm.validade_meses}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, validade_meses: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-conteudo">Conteúdo programático</Label>
+                    <textarea
+                      id="edit-conteudo"
+                      value={editForm.conteudo_programatico}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, conteudo_programatico: e.target.value }))}
+                      placeholder="Tópicos abordados, ementa..."
+                      rows={6}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={cancelEdit}
+                      disabled={savingEdit}
+                    >
+                      <XIcon className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={handleEditSave}
+                      disabled={savingEdit}
+                    >
+                      {savingEdit
+                        ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        : <Save className="h-4 w-4 mr-2" />}
+                      Salvar
+                    </Button>
                   </div>
                 </div>
-                {selected.rejection_reason && (
-                  <div className="p-3 rounded-md bg-destructive/10 text-sm text-destructive">
-                    <strong>Motivo da rejeição:</strong> {selected.rejection_reason}
-                  </div>
-                )}
-                {selected.conteudo_programatico && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-muted-foreground">Conteúdo programático</h4>
-                    <div className="p-3 rounded-md bg-muted/40 border text-sm whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
-                      {selected.conteudo_programatico}
+              ) : (
+                <div className="mt-6 space-y-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => startEdit(selected)}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar informações
+                  </Button>
+                  <DetailRow label="Colaborador" value={selected.employee_name} />
+                  <DetailRow label="Curso / Documento" value={selected.course_name} />
+                  {selected.nr_codes && selected.nr_codes.length > 0 && (
+                    <div className="flex items-center justify-between py-2 border-b">
+                      <span className="text-sm text-muted-foreground">Treinamento (NR)</span>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {selected.nr_codes.map(nr => (
+                          <Badge key={nr} variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                            {nr}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <DetailRow label="Arquivo" value={selected.file_name} />
+                  <DetailRow label="Conclusão" value={selected.completion_date ? format(new Date(selected.completion_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
+                  <DetailRow label="Vencimento" value={selected.expiry_date ? format(new Date(selected.expiry_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
+                  <DetailRow label="Validade" value={selected.validade_meses ? formatValidade(selected.validade_meses) : null} />
+                  <DetailRow label="Carga horária" value={selected.hours ? `${selected.hours}h` : null} />
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={CERT_STATUS[selected.status ?? '']?.variant ?? 'outline'}>
+                        {CERT_STATUS[selected.status ?? '']?.label ?? selected.status ?? '—'}
+                      </Badge>
+                      {selected.source === 'manual' && (
+                        <Badge variant="outline" className="text-blue-500 border-blue-500/50">
+                          Manual
+                        </Badge>
+                      )}
+                      {selected.renewed_at && (
+                        <span className="text-xs text-muted-foreground">
+                          Atualizado em {format(new Date(selected.renewed_at), 'dd/MM/yyyy')}
+                        </span>
+                      )}
                     </div>
                   </div>
-                )}
-                {selected.file_url && (
-                  <Button variant="outline" className="w-full" asChild>
-                    <a href={selected.file_url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-2" />Abrir arquivo
-                    </a>
+                  {selected.rejection_reason && (
+                    <div className="p-3 rounded-md bg-destructive/10 text-sm text-destructive">
+                      <strong>Motivo da rejeição:</strong> {selected.rejection_reason}
+                    </div>
+                  )}
+                  {selected.conteudo_programatico && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium text-muted-foreground">Conteúdo programático</h4>
+                      <div className="p-3 rounded-md bg-muted/40 border text-sm whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                        {selected.conteudo_programatico}
+                      </div>
+                    </div>
+                  )}
+                  {selected.file_url && (
+                    <Button variant="outline" className="w-full" asChild>
+                      <a href={selected.file_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 mr-2" />Abrir arquivo
+                      </a>
+                    </Button>
+                  )}
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled={deletingId === selected.id}
+                    onClick={(e) => handleDeleteCert(selected, e, false)}
+                  >
+                    {deletingId === selected.id
+                      ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      : <Trash2 className="h-4 w-4 mr-2" />}
+                    Excluir certificado
                   </Button>
-                )}
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  disabled={deletingId === selected.id}
-                  onClick={(e) => handleDeleteCert(selected, e, false)}
-                >
-                  {deletingId === selected.id
-                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    : <Trash2 className="h-4 w-4 mr-2" />}
-                  Excluir certificado
-                </Button>
-                {selected.created_at && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Processado em {format(new Date(selected.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                  </p>
-                )}
-              </div>
+                  {selected.created_at && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Processado em {format(new Date(selected.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </SheetContent>
