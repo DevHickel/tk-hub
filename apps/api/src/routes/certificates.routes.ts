@@ -14,38 +14,36 @@ export const certificatesRoutes = new Hono<{ Variables: AppVariables }>()
 // Enqueues background extraction job for a previously uploaded certificate.
 // Called by the frontend right after inserting the processed_certificates record.
 //
-// Defesa: a URL e o nome do arquivo são lidos do banco (fonte confiável), não
-// do body — evita SSRF (frontend mandando file_url arbitrário) e IDOR (outro
-// usuário disparando extração em cert alheio).
+// Defesa:
+// - Só manager/admin podem disparar (certs são da empresa, não de um usuário).
+// - file_url e file_name vêm do banco (fonte confiável), body é ignorado — evita SSRF.
+// - file_url precisa apontar pra storage do próprio Supabase.
 certificatesRoutes.post('/certificates/:id/extract', async (c) => {
   const userId = c.get('userId')
   const userRole = c.get('userRole')
   const certificateId = c.req.param('id')
 
+  if (!['admin', 'manager'].includes(userRole)) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
   try {
-    const { data: cert, error: ownerErr } = await supabase
+    const { data: cert, error: lookupErr } = await supabase
       .from('processed_certificates')
-      .select('id, file_url, file_name, uploaded_by')
+      .select('id, file_url, file_name')
       .eq('id', certificateId)
       .maybeSingle()
 
-    if (ownerErr || !cert) {
+    if (lookupErr || !cert) {
       return c.json({ error: 'Not found' }, 404)
     }
 
-    const isManager = ['admin', 'manager'].includes(userRole)
-    const certWithOwner = cert as { id: string; file_url: string | null; file_name: string | null; uploaded_by?: string | null }
-    if (!isManager && certWithOwner.uploaded_by && certWithOwner.uploaded_by !== userId) {
-      return c.json({ error: 'Forbidden' }, 403)
-    }
-
-    const fileUrl = certWithOwner.file_url
-    const fileName = certWithOwner.file_name
+    const fileUrl = cert.file_url
+    const fileName = cert.file_name
     if (!fileUrl || !fileName) {
       return c.json({ error: 'Certificate has no file attached' }, 400)
     }
 
-    // SSRF guard: precisa apontar pra Supabase storage do próprio projeto.
     const allowedPrefix = `${process.env.SUPABASE_URL}/storage/v1/object/`
     if (!fileUrl.startsWith(allowedPrefix)) {
       safeLog('warn', 'Certificate extract rejected — file_url outside Supabase storage', {
