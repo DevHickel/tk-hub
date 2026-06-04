@@ -33,6 +33,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import { SourceLightbox } from '@/components/chat/SourceLightbox';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -399,7 +400,7 @@ export default function Chat() {
                           <p className="whitespace-pre-wrap break-words">{message.content}</p>
                         ) : (
                           <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-headings:my-2 prose-table:my-2 prose-hr:my-2 prose-strong:text-foreground prose-code:text-foreground">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{message.content}</ReactMarkdown>
                           </div>
                         )}
                         {!isUser && message.sources && message.sources.length > 0 && (
