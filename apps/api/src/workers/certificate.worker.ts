@@ -14,6 +14,9 @@ interface ExtractedCertData {
   completion_date: string | null // ISO date YYYY-MM-DD
   expiry_date: string | null     // ISO date YYYY-MM-DD
   hours: number | null
+  validade_meses: number | null
+  conteudo_programatico: string | null
+  nr_codes: string[] | null
 }
 
 const EXTRACTION_PROMPT = `Você é um extrator de dados de certificados de treinamento. Sua tarefa é ler o certificado e retornar um JSON estruturado com as informações encontradas.
@@ -24,17 +27,23 @@ Retorne APENAS este JSON (sem texto, sem markdown, sem explicações):
   "course_name": "Nome exato do curso, treinamento ou habilitação",
   "completion_date": "YYYY-MM-DD",
   "expiry_date": "YYYY-MM-DD ou null",
-  "hours": 40
+  "hours": 40,
+  "validade_meses": 12,
+  "conteudo_programatico": "Texto com a ementa / tópicos cobertos no treinamento",
+  "nr_codes": ["NR-6", "NR-33"]
 }
 
 Instruções obrigatórias:
 - employee_name: nome do PARTICIPANTE, não da instituição emissora
 - course_name: nome do curso como está escrito, sem abreviações inventadas
 - completion_date: data de CONCLUSÃO ou EMISSÃO do certificado (use a data principal do documento)
-- expiry_date: data de VENCIMENTO/VALIDADE — se o certificado tiver "válido por N anos", some N anos à completion_date. Se não houver vencimento, use null
+- expiry_date: data de VENCIMENTO/VALIDADE explícita no certificado. Se o certificado tiver "válido por N anos/meses", some à completion_date. Se não houver, use null
 - hours: carga horária como número inteiro. Se não houver, use null
+- validade_meses: duração da validade em MESES, como número inteiro. Ex: "válido por 2 anos" → 24, "validade de 1 ano" → 12, "6 meses" → 6. Se o certificado não mencionar nada sobre validade ou vencimento, use null
+- conteudo_programatico: ementa do curso, tópicos abordados, programa, conteúdo. Copie como está, mantendo quebras de linha. Pode ser longo. Se não houver, use null
+- nr_codes: lista de Normas Regulamentadoras mencionadas (ex: "NR-6", "NR-33", "NR-35"). Formate sempre como "NR-NN" com hífen. Se não houver NR mencionada, use [] ou null
 - Datas SEMPRE em formato YYYY-MM-DD
-- Se um campo não existir no certificado, use null
+- Se um campo não existir no certificado, use null (exceto nr_codes que pode ser [])
 - Retorne SOMENTE o JSON, sem qualquer outro texto`
 
 // Extrai dados do markdown transcrito pelo vision-parser usando GPT-4o text-only.
@@ -64,13 +73,25 @@ function isExtractionEmpty(data: ExtractedCertData): boolean {
     data.course_name === null &&
     data.completion_date === null &&
     data.expiry_date === null &&
-    data.hours === null
+    data.hours === null &&
+    data.validade_meses === null &&
+    data.conteudo_programatico === null &&
+    (data.nr_codes === null || data.nr_codes.length === 0)
   )
 }
 
 function parseExtractedJson(raw: string): ExtractedCertData {
+  const empty: ExtractedCertData = {
+    employee_name: null,
+    course_name: null,
+    completion_date: null,
+    expiry_date: null,
+    hours: null,
+    validade_meses: null,
+    conteudo_programatico: null,
+    nr_codes: null,
+  }
   try {
-    // Strip markdown code fences if present
     const cleaned = raw.replace(/```(?:json)?\n?/g, '').trim()
     const parsed = JSON.parse(cleaned)
     return {
@@ -79,14 +100,54 @@ function parseExtractedJson(raw: string): ExtractedCertData {
       completion_date: isValidDate(parsed.completion_date) ? parsed.completion_date : null,
       expiry_date: isValidDate(parsed.expiry_date) ? parsed.expiry_date : null,
       hours: typeof parsed.hours === 'number' ? Math.round(parsed.hours) : null,
+      validade_meses: typeof parsed.validade_meses === 'number' && parsed.validade_meses > 0
+        ? Math.round(parsed.validade_meses)
+        : null,
+      conteudo_programatico: typeof parsed.conteudo_programatico === 'string' && parsed.conteudo_programatico.trim()
+        ? parsed.conteudo_programatico.trim()
+        : null,
+      nr_codes: Array.isArray(parsed.nr_codes)
+        ? parsed.nr_codes
+            .filter((c: unknown): c is string => typeof c === 'string' && /^NR[- ]?\d+$/i.test(c.trim()))
+            .map((c: string) => c.trim().toUpperCase().replace(/^NR\s*-?\s*/i, 'NR-'))
+        : null,
     }
   } catch (err) {
     safeLog('warn', 'Failed to parse extraction JSON — returning empty', {
       error: (err as Error).message,
       raw: raw.slice(0, 500),
     })
-    return { employee_name: null, course_name: null, completion_date: null, expiry_date: null, hours: null }
+    return empty
   }
+}
+
+// Aplica regras de validade:
+// - Se LLM trouxe validade_meses → ok, usa.
+// - Se LLM não trouxe validade_meses MAS trouxe completion + expiry → infere validade em meses.
+// - Se ainda assim ficar null E houver completion_date → assume 12 meses (default).
+// Depois calcula expiry_date se estiver null e tivermos completion + validade_meses.
+function applyValidadeRules(data: ExtractedCertData): ExtractedCertData {
+  let { validade_meses, expiry_date } = data
+  const { completion_date } = data
+
+  if (validade_meses == null && completion_date && expiry_date) {
+    const start = new Date(completion_date + 'T00:00:00Z')
+    const end = new Date(expiry_date + 'T00:00:00Z')
+    const months = (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth())
+    if (months > 0) validade_meses = months
+  }
+
+  if (validade_meses == null && completion_date) {
+    validade_meses = 12 // default 1 ano quando o certificado não fala nada
+  }
+
+  if (!expiry_date && completion_date && validade_meses) {
+    const d = new Date(completion_date + 'T00:00:00Z')
+    d.setUTCMonth(d.getUTCMonth() + validade_meses)
+    expiry_date = d.toISOString().slice(0, 10)
+  }
+
+  return { ...data, validade_meses, expiry_date }
 }
 
 function isValidDate(val: unknown): val is string {
@@ -127,7 +188,8 @@ export function setupCertificateWorker() {
         await job.updateProgress(60)
 
         // 3. Feed the parsed text to GPT-4o (text-only) to get structured JSON
-        const extracted = await extractFromParsedText(fullText)
+        const rawExtracted = await extractFromParsedText(fullText)
+        const extracted = applyValidadeRules(rawExtracted)
 
         await job.updateProgress(80)
 
@@ -174,6 +236,9 @@ export function setupCertificateWorker() {
                 completion_date: extracted.completion_date,
                 expiry_date: extracted.expiry_date,
                 hours: extracted.hours,
+                validade_meses: extracted.validade_meses,
+                conteudo_programatico: extracted.conteudo_programatico,
+                nr_codes: extracted.nr_codes,
                 file_name: fileName,
                 file_url: fileUrl,
                 status: 'pending',
@@ -215,6 +280,9 @@ export function setupCertificateWorker() {
             completion_date: extracted.completion_date,
             expiry_date: extracted.expiry_date,
             hours: extracted.hours,
+            validade_meses: extracted.validade_meses,
+            conteudo_programatico: extracted.conteudo_programatico,
+            nr_codes: extracted.nr_codes,
             status: 'pending', // back to pending for admin review (trigger will convert to 'expired' if expiry_date < today)
           })
           .eq('id', certificateId)

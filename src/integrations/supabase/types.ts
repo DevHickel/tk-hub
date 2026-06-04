@@ -339,6 +339,7 @@ export type Database = {
       processed_certificates: {
         Row: {
           completion_date: string | null
+          conteudo_programatico: string | null
           course_name: string | null
           created_at: string | null
           employee_name: string | null
@@ -347,13 +348,16 @@ export type Database = {
           file_url: string | null
           hours: number | null
           id: string
+          nr_codes: string[] | null
           org_id: string | null
           raw_data: Json | null
           rejection_reason: string | null
           status: string | null
+          validade_meses: number | null
         }
         Insert: {
           completion_date?: string | null
+          conteudo_programatico?: string | null
           course_name?: string | null
           created_at?: string | null
           employee_name?: string | null
@@ -362,13 +366,16 @@ export type Database = {
           file_url?: string | null
           hours?: number | null
           id?: string
+          nr_codes?: string[] | null
           org_id?: string | null
           raw_data?: Json | null
           rejection_reason?: string | null
           status?: string | null
+          validade_meses?: number | null
         }
         Update: {
           completion_date?: string | null
+          conteudo_programatico?: string | null
           course_name?: string | null
           created_at?: string | null
           employee_name?: string | null
@@ -377,10 +384,12 @@ export type Database = {
           file_url?: string | null
           hours?: number | null
           id?: string
+          nr_codes?: string[] | null
           org_id?: string | null
           raw_data?: Json | null
           rejection_reason?: string | null
           status?: string | null
+          validade_meses?: number | null
         }
         Relationships: []
       }

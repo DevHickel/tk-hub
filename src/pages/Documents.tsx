@@ -85,6 +85,9 @@ interface Certificate {
   completion_date: string | null;
   expiry_date: string | null;
   hours: number | null;
+  validade_meses: number | null;
+  conteudo_programatico: string | null;
+  nr_codes: string[] | null;
   file_name: string | null;
   file_url: string | null;
   status: string | null;
@@ -198,6 +201,9 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
     completion_date: '',
     expiry_date: '',
     hours: '',
+    validade_meses: '',
+    nr_codes: '',
+    conteudo_programatico: '',
     file_name: '',
     file_url: '',
   });
@@ -454,6 +460,9 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
       completion_date: '',
       expiry_date: '',
       hours: '',
+      validade_meses: '',
+      nr_codes: '',
+      conteudo_programatico: '',
       file_name: '',
       file_url: '',
     });
@@ -495,21 +504,46 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
       !manualForm.employee_name.trim() ||
       !manualForm.course_name.trim() ||
       !manualForm.completion_date ||
-      !manualForm.expiry_date ||
       !manualForm.hours
     ) {
-      toast.error('Todos os campos são obrigatórios.');
+      toast.error('Colaborador, curso, data de conclusão e carga horária são obrigatórios.');
       return;
     }
 
     setManualSaving(true);
     try {
+      // Regras de validade (mesma lógica do worker):
+      // se nem expiry nem validade vierem, assume 12 meses.
+      let validadeMeses = manualForm.validade_meses ? parseInt(manualForm.validade_meses, 10) : null;
+      let expiryDate = manualForm.expiry_date || null;
+      const completionDate = manualForm.completion_date;
+      if (validadeMeses == null && !expiryDate) validadeMeses = 12;
+      if (!expiryDate && completionDate && validadeMeses) {
+        const d = new Date(completionDate + 'T00:00:00Z');
+        d.setUTCMonth(d.getUTCMonth() + validadeMeses);
+        expiryDate = d.toISOString().slice(0, 10);
+      }
+      if (validadeMeses == null && expiryDate && completionDate) {
+        const start = new Date(completionDate + 'T00:00:00Z');
+        const end = new Date(expiryDate + 'T00:00:00Z');
+        const months = (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth());
+        if (months > 0) validadeMeses = months;
+      }
+
+      const nrCodes = manualForm.nr_codes
+        .split(/[,;\s]+/)
+        .map(s => s.trim().toUpperCase().replace(/^NR\s*-?\s*/i, 'NR-'))
+        .filter(s => /^NR-\d+$/.test(s));
+
       const { error } = await supabase.from('processed_certificates').insert({
         employee_name: manualForm.employee_name.trim(),
         course_name: manualForm.course_name.trim(),
-        completion_date: manualForm.completion_date || null,
-        expiry_date: manualForm.expiry_date || null,
+        completion_date: completionDate || null,
+        expiry_date: expiryDate,
         hours: manualForm.hours ? Number(manualForm.hours) : null,
+        validade_meses: validadeMeses,
+        nr_codes: nrCodes.length > 0 ? nrCodes : null,
+        conteudo_programatico: manualForm.conteudo_programatico.trim() || null,
         file_name: manualForm.file_name || null,
         file_url: manualForm.file_url || null,
         status: 'approved', // manually entered by admin — trigger will convert to 'expired' if past date
@@ -672,7 +706,20 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                   return (
                     <TableRow key={cert.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelected(cert)}>
                       <TableCell className="font-medium">{cert.employee_name ?? '—'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{cert.course_name ?? cert.file_name ?? '—'}</TableCell>
+                      <TableCell className="max-w-[260px]">
+                        <div className="flex flex-col gap-1">
+                          <span className="truncate">{cert.course_name ?? cert.file_name ?? '—'}</span>
+                          {cert.nr_codes && cert.nr_codes.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {cert.nr_codes.map(nr => (
+                                <Badge key={nr} variant="outline" className="text-[10px] py-0 h-4 border-amber-500/50 text-amber-600 dark:text-amber-400">
+                                  {nr}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{cert.completion_date ? format(new Date(cert.completion_date), 'dd/MM/yyyy') : '—'}</TableCell>
                       <TableCell>{expiryBadge(cert.expiry_date)}</TableCell>
                       <TableCell>{cert.hours ?? '—'}</TableCell>
@@ -804,7 +851,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
           <DialogHeader>
             <DialogTitle>Adicionar certificado manualmente</DialogTitle>
             <DialogDescription>
-              Todos os campos são obrigatórios. Anexar o arquivo é opcional.
+              Colaborador, curso, conclusão e carga horária são obrigatórios. Vencimento é opcional — se não for preenchido, será calculado a partir da validade (padrão 1 ano).
             </DialogDescription>
           </DialogHeader>
 
@@ -829,6 +876,16 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                 required
               />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="manual-nr-codes">Normas (NR) — opcional</Label>
+              <Input
+                id="manual-nr-codes"
+                value={manualForm.nr_codes}
+                onChange={(e) => setManualForm(prev => ({ ...prev, nr_codes: e.target.value }))}
+                placeholder="Ex: NR-6, NR-33"
+              />
+              <p className="text-[11px] text-muted-foreground">Separe por vírgula ou espaço. Use o formato NR-NN.</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="manual-completion">Data de conclusão</Label>
@@ -841,26 +898,49 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="manual-expiry">Data de vencimento</Label>
+                <Label htmlFor="manual-expiry">Vencimento (opcional)</Label>
                 <Input
                   id="manual-expiry"
                   type="date"
                   value={manualForm.expiry_date}
                   onChange={(e) => setManualForm(prev => ({ ...prev, expiry_date: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="manual-hours">Carga horária (horas)</Label>
+                <Input
+                  id="manual-hours"
+                  type="number"
+                  min="1"
+                  value={manualForm.hours}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, hours: e.target.value }))}
+                  placeholder="40"
                   required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="manual-validade">Validade (meses) — opcional</Label>
+                <Input
+                  id="manual-validade"
+                  type="number"
+                  min="1"
+                  value={manualForm.validade_meses}
+                  onChange={(e) => setManualForm(prev => ({ ...prev, validade_meses: e.target.value }))}
+                  placeholder="12"
                 />
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="manual-hours">Carga horária (horas)</Label>
-              <Input
-                id="manual-hours"
-                type="number"
-                min="1"
-                value={manualForm.hours}
-                onChange={(e) => setManualForm(prev => ({ ...prev, hours: e.target.value }))}
-                placeholder="40"
-                required
+              <Label htmlFor="manual-conteudo">Conteúdo programático — opcional</Label>
+              <textarea
+                id="manual-conteudo"
+                value={manualForm.conteudo_programatico}
+                onChange={(e) => setManualForm(prev => ({ ...prev, conteudo_programatico: e.target.value }))}
+                placeholder="Tópicos abordados, ementa do treinamento..."
+                rows={4}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
               />
             </div>
             <div className="space-y-1">
@@ -926,9 +1006,22 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
               <div className="mt-6 space-y-4">
                 <DetailRow label="Colaborador" value={selected.employee_name} />
                 <DetailRow label="Curso / Documento" value={selected.course_name} />
+                {selected.nr_codes && selected.nr_codes.length > 0 && (
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <span className="text-sm text-muted-foreground">Treinamento (NR)</span>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {selected.nr_codes.map(nr => (
+                        <Badge key={nr} variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                          {nr}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <DetailRow label="Arquivo" value={selected.file_name} />
                 <DetailRow label="Conclusão" value={selected.completion_date ? format(new Date(selected.completion_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
                 <DetailRow label="Vencimento" value={selected.expiry_date ? format(new Date(selected.expiry_date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : null} />
+                <DetailRow label="Validade" value={selected.validade_meses ? formatValidade(selected.validade_meses) : null} />
                 <DetailRow label="Carga horária" value={selected.hours ? `${selected.hours}h` : null} />
                 <div className="flex items-center justify-between py-2 border-b">
                   <span className="text-sm text-muted-foreground">Status</span>
@@ -951,6 +1044,14 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                 {selected.rejection_reason && (
                   <div className="p-3 rounded-md bg-destructive/10 text-sm text-destructive">
                     <strong>Motivo da rejeição:</strong> {selected.rejection_reason}
+                  </div>
+                )}
+                {selected.conteudo_programatico && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Conteúdo programático</h4>
+                    <div className="p-3 rounded-md bg-muted/40 border text-sm whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                      {selected.conteudo_programatico}
+                    </div>
                   </div>
                 )}
                 {selected.file_url && (
@@ -1251,4 +1352,12 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
       <span className="text-sm font-medium">{value ?? '—'}</span>
     </div>
   );
+}
+
+function formatValidade(meses: number): string {
+  if (meses % 12 === 0) {
+    const anos = meses / 12;
+    return `${anos} ${anos === 1 ? 'ano' : 'anos'}`;
+  }
+  return `${meses} ${meses === 1 ? 'mês' : 'meses'}`;
 }
