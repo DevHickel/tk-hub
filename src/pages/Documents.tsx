@@ -77,7 +77,6 @@ import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { logActivity } from '@/lib/activity';
-import { api } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -298,7 +297,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
         const { data: renewedCert } = await supabase
           .from('processed_certificates')
           .select('id, employee_name, course_name, status')
-          .eq('renewed_from' as string, certId)
+          .eq('renewed_from', certId)
           .maybeSingle();
 
         setWatchingIds(prev => { const s = new Set(prev); s.delete(certId); return s; });
@@ -315,6 +314,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
           employee_name: null, course_name: null, completion_date: null,
           hours: null, file_name: null, file_url: null,
           rejection_reason: null, created_at: null,
+          validade_meses: null, conteudo_programatico: null, nr_codes: null,
         });
         fetchCerts();
         return;
@@ -760,8 +760,8 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
         </CardContent>
       </Card>
 
-      {/* Table */}
-      <Card>
+      {/* Table — desktop */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -871,6 +871,111 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
           </Table>
         </CardContent>
       </Card>
+
+      {/* Cards — mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+          ))
+        ) : certs.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12 text-muted-foreground">
+              <FileCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              Nenhum certificado encontrado.
+            </CardContent>
+          </Card>
+        ) : (
+          certs.map((cert) => {
+            const isWatching = watchingIds.has(cert.id);
+            const effectiveStatus = isWatching ? 'processing' : (cert.status ?? '');
+            const cfg = CERT_STATUS[effectiveStatus] ?? { label: effectiveStatus || '—', variant: 'outline' as const, icon: null };
+            const isDeleting = deletingId === cert.id;
+            const isExtracting = extractingId === cert.id;
+            const canExtract = !isWatching && (cert.status === 'pending' || cert.status === 'error') && !!cert.file_url;
+            return (
+              <Card key={cert.id} className="cursor-pointer hover:bg-muted/40 active:bg-muted/60" onClick={() => setSelected(cert)}>
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{cert.employee_name ?? '—'}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {cert.course_name ?? cert.file_name ?? '—'}
+                      </p>
+                    </div>
+                    <Badge variant={cfg.variant} className="flex items-center gap-1 shrink-0">
+                      {cfg.icon}{cfg.label}
+                    </Badge>
+                  </div>
+
+                  {cert.nr_codes && cert.nr_codes.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {cert.nr_codes.map(nr => (
+                        <Badge key={nr} variant="outline" className="text-[10px] py-0 h-4 border-amber-500/50 text-amber-600 dark:text-amber-400">
+                          {nr}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Conclusão</p>
+                      <p>{cert.completion_date ? format(new Date(cert.completion_date), 'dd/MM/yyyy') : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Vencimento</p>
+                      <div>{expiryBadge(cert.expiry_date) ?? <span>—</span>}</div>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Carga</p>
+                      <p>{cert.hours ? `${cert.hours}h` : '—'}</p>
+                    </div>
+                  </div>
+
+                  {(cert.source === 'manual' || cert.renewed_at) && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {cert.source === 'manual' && (
+                        <Badge variant="outline" className="text-blue-500 border-blue-500/50">Manual</Badge>
+                      )}
+                      {cert.renewed_at && (
+                        <span className="text-muted-foreground">
+                          Atualizado em {format(new Date(cert.renewed_at), 'dd/MM/yyyy')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                    {canExtract && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                        disabled={isExtracting}
+                        onClick={(e) => handleExtract(cert, e)}
+                      >
+                        {isExtracting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                        Extrair
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      disabled={isDeleting}
+                      onClick={(e) => handleDeleteCert(cert, e)}
+                    >
+                      {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                      Excluir
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
@@ -1494,7 +1599,8 @@ function RagTab() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Desktop */}
+      <Card className="hidden md:block">
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -1562,6 +1668,55 @@ function RagTab() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-16 w-full" /></CardContent></Card>
+          ))
+        ) : docs.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              Nenhum documento RAG encontrado.
+            </CardContent>
+          </Card>
+        ) : (
+          docs.map((doc) => {
+            const cfg = RAG_STATUS[doc.status ?? 'active'] ?? { label: 'Ativo', variant: 'default' as const };
+            const isDeleting = deletingSource === doc.source_name;
+            return (
+              <Card key={doc.source_name}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <span className="text-sm font-medium break-all">{doc.source_name}</span>
+                    </div>
+                    <Badge variant={cfg.variant} className="shrink-0">{cfg.label}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+                    <span>
+                      {doc.chunk_count} chunk{doc.chunk_count !== 1 ? 's' : ''}
+                      {doc.created_at && ` • ${format(new Date(doc.created_at), 'dd/MM/yyyy')}`}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8"
+                      onClick={() => handleDelete(doc)}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

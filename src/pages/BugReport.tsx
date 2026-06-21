@@ -384,78 +384,149 @@ export default function BugReport() {
                       Nenhum report encontrado
                     </p>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Usuário</TableHead>
-                          <TableHead>Descrição</TableHead>
-                          <TableHead>Imagem</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    <>
+                      {/* Desktop: tabela */}
+                      <div className="hidden md:block">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Data</TableHead>
+                              <TableHead>Usuário</TableHead>
+                              <TableHead>Descrição</TableHead>
+                              <TableHead>Imagem</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredReports.map((report) => (
+                              <TableRow key={report.id}>
+                                <TableCell className="whitespace-nowrap">
+                                  {report.created_at
+                                    ? format(new Date(report.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className="whitespace-nowrap">
+                                  {report.user_name || 'Usuário desconhecido'}
+                                </TableCell>
+                                <TableCell className="max-w-md">
+                                  {report.description}
+                                </TableCell>
+                                <TableCell>
+                                  {report.screenshot_url ? (
+                                    <a
+                                      href={report.screenshot_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      <ImageIcon className="h-4 w-4" />
+                                      Ver
+                                    </a>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={report.status === 'fixed' ? 'default' : 'secondary'}
+                                    className="cursor-pointer"
+                                    onClick={() => toggleStatus(report.id, report.status)}
+                                  >
+                                    {report.status === 'fixed' ? (
+                                      <><CheckCircle className="h-3 w-3 mr-1" /> Corrigido</>
+                                    ) : (
+                                      <><Clock className="h-3 w-3 mr-1" /> Pendente</>
+                                    )}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => reportDelete.requestDelete(report.id)}
+                                    disabled={reportDelete.isDeleting}
+                                  >
+                                    {reportDelete.isDeleting && reportDelete.itemToDelete === report.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Mobile: cards */}
+                      <div className="md:hidden space-y-3">
                         {filteredReports.map((report) => (
-                          <TableRow key={report.id}>
-                            <TableCell className="whitespace-nowrap">
-                              {report.created_at 
-                                ? format(new Date(report.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                                : '-'}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {report.user_name || 'Usuário desconhecido'}
-                            </TableCell>
-                            <TableCell className="max-w-md">
-                              {report.description}
-                            </TableCell>
-                            <TableCell>
-                              {report.screenshot_url ? (
-                                <a 
-                                  href={report.screenshot_url} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline flex items-center gap-1"
+                          <Card key={report.id} className="overflow-hidden">
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium truncate">
+                                    {report.user_name || 'Usuário desconhecido'}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {report.created_at
+                                      ? format(new Date(report.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                                      : '-'}
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant={report.status === 'fixed' ? 'default' : 'secondary'}
+                                  className="cursor-pointer shrink-0"
+                                  onClick={() => toggleStatus(report.id, report.status)}
                                 >
-                                  <ImageIcon className="h-4 w-4" />
-                                  Ver
-                                </a>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={report.status === 'fixed' ? 'default' : 'secondary'}
-                                className="cursor-pointer"
-                                onClick={() => toggleStatus(report.id, report.status)}
-                              >
-                                {report.status === 'fixed' ? (
-                                  <><CheckCircle className="h-3 w-3 mr-1" /> Corrigido</>
+                                  {report.status === 'fixed' ? (
+                                    <><CheckCircle className="h-3 w-3 mr-1" /> Corrigido</>
+                                  ) : (
+                                    <><Clock className="h-3 w-3 mr-1" /> Pendente</>
+                                  )}
+                                </Badge>
+                              </div>
+
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                {report.description}
+                              </p>
+
+                              <div className="flex items-center justify-between pt-2 border-t">
+                                {report.screenshot_url ? (
+                                  <a
+                                    href={report.screenshot_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline flex items-center gap-1 text-sm"
+                                  >
+                                    <ImageIcon className="h-4 w-4" />
+                                    Ver imagem
+                                  </a>
                                 ) : (
-                                  <><Clock className="h-3 w-3 mr-1" /> Pendente</>
+                                  <span className="text-xs text-muted-foreground">Sem imagem</span>
                                 )}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button 
-                                variant="ghost" 
-                                size="icon"
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => reportDelete.requestDelete(report.id)}
-                                disabled={reportDelete.isDeleting}
-                              >
-                                {reportDelete.isDeleting && reportDelete.itemToDelete === report.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => reportDelete.requestDelete(report.id)}
+                                  disabled={reportDelete.isDeleting}
+                                >
+                                  {reportDelete.isDeleting && reportDelete.itemToDelete === report.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <><Trash2 className="h-4 w-4 mr-1" /> Excluir</>
+                                  )}
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>

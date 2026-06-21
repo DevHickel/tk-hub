@@ -443,37 +443,101 @@ export default function Admin() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Cargo</TableHead>
-                      <TableHead>Mensagens</TableHead>
-                      <TableHead>Último Acesso</TableHead>
-                      {isAdmin && <TableHead className="w-16">Ações</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((userItem) => {
-                      // Admins can edit everyone except themselves
-                      // Managers can only edit users with 'user' role
-                      const isOwnProfile = userItem.id === profile?.id;
-                      const canEditRole = isAdmin
-                        ? !isOwnProfile
-                        : (userItem.app_role === 'user' && !isOwnProfile);
-                      
-                      return (
-                        <TableRow key={userItem.id}>
-                          <TableCell className="font-medium">{userItem.full_name || '-'}</TableCell>
-                          <TableCell>{userItem.email || '-'}</TableCell>
-                          <TableCell>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Cargo</TableHead>
+                        <TableHead>Mensagens</TableHead>
+                        <TableHead>Último Acesso</TableHead>
+                        {isAdmin && <TableHead className="w-16">Ações</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredUsers.map((userItem) => {
+                        const isOwnProfile = userItem.id === profile?.id;
+                        const canEditRole = isAdmin
+                          ? !isOwnProfile
+                          : (userItem.app_role === 'user' && !isOwnProfile);
+                        return (
+                          <TableRow key={userItem.id}>
+                            <TableCell className="font-medium">{userItem.full_name || '-'}</TableCell>
+                            <TableCell>{userItem.email || '-'}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={userItem.app_role}
+                                onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}
+                                disabled={!canEditRole}
+                              >
+                                <SelectTrigger className="w-32">
+                                  <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                                  <SelectItem value="manager">Gerente</SelectItem>
+                                  <SelectItem value="user">Usuário</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">{messageCountByUserId[userItem.id] || 0}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {userItem.last_sign_in_at
+                                ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                                : '-'}
+                            </TableCell>
+                            {isAdmin && (
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => userDelete.requestDelete(userItem.id)}
+                                  disabled={userItem.id === profile?.id || userDelete.isDeleting}
+                                  title="Excluir usuário"
+                                >
+                                  {userDelete.isDeleting && userDelete.itemToDelete === userItem.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  )}
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="md:hidden space-y-3">
+                  {filteredUsers.map((userItem) => {
+                    const isOwnProfile = userItem.id === profile?.id;
+                    const canEditRole = isAdmin
+                      ? !isOwnProfile
+                      : (userItem.app_role === 'user' && !isOwnProfile);
+                    return (
+                      <Card key={userItem.id}>
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{userItem.full_name || '-'}</p>
+                              <p className="text-xs text-muted-foreground truncate">{userItem.email || '-'}</p>
+                            </div>
+                            <Badge variant="secondary" className="shrink-0">
+                              {messageCountByUserId[userItem.id] || 0} msg
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Select
                               value={userItem.app_role}
                               onValueChange={(value: AppRole) => updateUserRole(userItem.id, value)}
                               disabled={!canEditRole}
                             >
-                              <SelectTrigger className="w-32">
+                              <SelectTrigger className="flex-1">
                                 <SelectValue>{roleLabels[userItem.app_role]}</SelectValue>
                               </SelectTrigger>
                               <SelectContent>
@@ -482,25 +546,12 @@ export default function Admin() {
                                 <SelectItem value="user">Usuário</SelectItem>
                               </SelectContent>
                             </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {messageCountByUserId[userItem.id] || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {userItem.last_sign_in_at 
-                              ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                              : '-'}
-                          </TableCell>
-                          {isAdmin && (
-                            <TableCell>
+                            {isAdmin && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => userDelete.requestDelete(userItem.id)}
                                 disabled={userItem.id === profile?.id || userDelete.isDeleting}
-                                title="Excluir usuário"
                               >
                                 {userDelete.isDeleting && userDelete.itemToDelete === userItem.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin text-destructive" />
@@ -508,13 +559,19 @@ export default function Admin() {
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 )}
                               </Button>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Último acesso:{' '}
+                            {userItem.last_sign_in_at
+                              ? format(new Date(userItem.last_sign_in_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+                              : '-'}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -551,68 +608,125 @@ export default function Admin() {
 
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-4">Convites Pendentes</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Criado em</TableHead>
-                        <TableHead>Expira em</TableHead>
-                        <TableHead className="w-24">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invites.map((invite) => {
-                        const isExpired = new Date(invite.expires_at) < new Date();
-                        return (
-                          <TableRow key={invite.id}>
-                            <TableCell className="font-medium">{invite.email}</TableCell>
-                            <TableCell>{getStatusBadge(invite.status, invite.expires_at)}</TableCell>
-                            <TableCell>
-                              {format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                            </TableCell>
-                            <TableCell>
-                              {format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-1">
-                                {invite.status === 'pending' && !isExpired && (
+
+                  <div className="hidden md:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Criado em</TableHead>
+                          <TableHead>Expira em</TableHead>
+                          <TableHead className="w-24">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {invites.map((invite) => {
+                          const isExpired = new Date(invite.expires_at) < new Date();
+                          return (
+                            <TableRow key={invite.id}>
+                              <TableCell className="font-medium">{invite.email}</TableCell>
+                              <TableCell>{getStatusBadge(invite.status, invite.expires_at)}</TableCell>
+                              <TableCell>
+                                {format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                              </TableCell>
+                              <TableCell>
+                                {format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  {invite.status === 'pending' && !isExpired && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => copyInviteLink(invite.token, invite.email)}
+                                      title="Copiar link de convite"
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => copyInviteLink(invite.token, invite.email)}
-                                    title="Copiar link de convite"
+                                    onClick={() => inviteDelete.requestDelete(invite.id)}
+                                    disabled={inviteDelete.isDeleting}
+                                    title="Excluir convite"
                                   >
-                                    <Copy className="h-4 w-4" />
+                                    {inviteDelete.isDeleting && inviteDelete.itemToDelete === invite.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {invites.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                              Nenhum convite pendente
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="md:hidden space-y-3">
+                    {invites.length === 0 ? (
+                      <p className="text-center text-sm text-muted-foreground py-6">Nenhum convite pendente</p>
+                    ) : (
+                      invites.map((invite) => {
+                        const isExpired = new Date(invite.expires_at) < new Date();
+                        return (
+                          <Card key={invite.id}>
+                            <CardContent className="p-4 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-medium text-sm break-all min-w-0 flex-1">{invite.email}</p>
+                                <div className="shrink-0">{getStatusBadge(invite.status, invite.expires_at)}</div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground">Criado em</p>
+                                  <p>{format(new Date(invite.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground">Expira em</p>
+                                  <p>{format(new Date(invite.expires_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-1 pt-2 border-t">
+                                {invite.status === 'pending' && !isExpired && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => copyInviteLink(invite.token, invite.email)}
+                                  >
+                                    <Copy className="h-4 w-4 mr-1" />
+                                    Copiar link
                                   </Button>
                                 )}
                                 <Button
                                   variant="ghost"
-                                  size="icon"
+                                  size="sm"
                                   onClick={() => inviteDelete.requestDelete(invite.id)}
                                   disabled={inviteDelete.isDeleting}
-                                  title="Excluir convite"
                                 >
                                   {inviteDelete.isDeleting && inviteDelete.itemToDelete === invite.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin text-destructive" />
                                   ) : (
-                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                    <><Trash2 className="h-4 w-4 mr-1 text-destructive" /></>
                                   )}
                                 </Button>
                               </div>
-                            </TableCell>
-                          </TableRow>
+                            </CardContent>
+                          </Card>
                         );
-                      })}
-                      {invites.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            Nenhum convite pendente
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      })
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -624,43 +738,65 @@ export default function Admin() {
                 <CardTitle>Logs de Atividade</CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data/Hora</TableHead>
-                      <TableHead>Usuário</TableHead>
-                      <TableHead>Ação</TableHead>
-                      <TableHead>Pontuação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activityLogs.map((log) => {
-                      const userName = log.profiles?.full_name || log.profiles?.email || '-';
-                      const score = cumulativeScoreByLogId[log.id];
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data/Hora</TableHead>
+                        <TableHead>Usuário</TableHead>
+                        <TableHead>Ação</TableHead>
+                        <TableHead>Pontuação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activityLogs.map((log) => {
+                        const userName = log.profiles?.full_name || log.profiles?.email || '-';
+                        const score = cumulativeScoreByLogId[log.id];
+                        return (
+                          <TableRow key={log.id}>
+                            <TableCell>
+                              {log.timestamp
+                                ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
+                                : '-'}
+                            </TableCell>
+                            <TableCell>{userName}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{getActionLabel(log.action)}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              {score != null ? <Badge variant="secondary">{score}</Badge> : '-'}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
 
-                      return (
-                        <TableRow key={log.id}>
-                          <TableCell>
-                            {log.timestamp
-                              ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
-                              : '-'}
-                          </TableCell>
-                          <TableCell>{userName}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{getActionLabel(log.action)}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            {score != null ? (
-                              <Badge variant="secondary">{score}</Badge>
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="md:hidden space-y-2">
+                  {activityLogs.map((log) => {
+                    const userName = log.profiles?.full_name || log.profiles?.email || '-';
+                    const score = cumulativeScoreByLogId[log.id];
+                    return (
+                      <Card key={log.id}>
+                        <CardContent className="p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{userName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {log.timestamp
+                                  ? format(new Date(log.timestamp), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })
+                                  : '-'}
+                              </p>
+                            </div>
+                            {score != null && <Badge variant="secondary" className="shrink-0">{score}</Badge>}
+                          </div>
+                          <Badge variant="outline" className="text-xs">{getActionLabel(log.action)}</Badge>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

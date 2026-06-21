@@ -352,6 +352,10 @@ export type Database = {
           org_id: string | null
           raw_data: Json | null
           rejection_reason: string | null
+          renewed_at: string | null
+          renewed_from: string | null
+          source: string | null
+          source_email: string | null
           status: string | null
           validade_meses: number | null
         }
@@ -370,6 +374,10 @@ export type Database = {
           org_id?: string | null
           raw_data?: Json | null
           rejection_reason?: string | null
+          renewed_at?: string | null
+          renewed_from?: string | null
+          source?: string | null
+          source_email?: string | null
           status?: string | null
           validade_meses?: number | null
         }
@@ -388,6 +396,10 @@ export type Database = {
           org_id?: string | null
           raw_data?: Json | null
           rejection_reason?: string | null
+          renewed_at?: string | null
+          renewed_from?: string | null
+          source?: string | null
+          source_email?: string | null
           status?: string | null
           validade_meses?: number | null
         }
