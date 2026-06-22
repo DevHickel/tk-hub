@@ -285,7 +285,7 @@ export default function Chat() {
   // o drawer em mobile.
   const renderConversationsList = (afterSelect?: () => void) => (
     <>
-      <div className="p-3 border-b">
+      <div className="p-3 pr-12 md:pr-3 border-b">
         <Button
           className="w-full gap-2"
           onClick={() => {
@@ -532,10 +532,11 @@ export default function Chat() {
                     handleSend();
                   }
                 }}
-                placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                placeholder="Digite sua mensagem..."
+                aria-label="Digite sua mensagem (Enter para enviar, Shift+Enter para nova linha)"
                 rows={1}
                 disabled={isLoading}
-                className="flex-1 resize-none rounded-xl border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004C97]/50 disabled:opacity-50 min-h-[48px] max-h-[200px]"
+                className="flex-1 resize-none rounded-xl border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#004C97]/50 disabled:opacity-50 min-h-[48px] max-h-[200px] [&::-webkit-scrollbar]:hidden [scrollbar-width:none]"
                 style={{ height: 'auto' }}
                 onInput={e => {
                   const el = e.currentTarget;
@@ -552,6 +553,9 @@ export default function Chat() {
                 <Send className="h-4 w-4" />
               </Button>
             </div>
+            <p className="hidden md:block text-[11px] text-muted-foreground mt-1 px-1">
+              Enter para enviar · Shift+Enter para nova linha
+            </p>
           </div>
         </div>
       </div>

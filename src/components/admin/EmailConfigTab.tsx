@@ -166,10 +166,11 @@ export function EmailConfigTab({ canEdit }: { canEdit: boolean }) {
           </div>
 
           {canEdit && (
-            <div className="flex gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Button
                 onClick={() => saveMutation.mutate()}
                 disabled={saveMutation.isPending || !form.smtp_host || !form.smtp_user}
+                className="w-full sm:w-auto"
               >
                 {saveMutation.isPending ? 'Salvando...' : 'Salvar configuração'}
               </Button>
@@ -177,6 +178,7 @@ export function EmailConfigTab({ canEdit }: { canEdit: boolean }) {
                 variant="outline"
                 onClick={() => testMutation.mutate()}
                 disabled={testMutation.isPending || !form.smtp_host || !form.smtp_user}
+                className="w-full sm:w-auto"
               >
                 <Send className="h-4 w-4 mr-2" />
                 {testMutation.isPending ? 'Enviando...' : 'Enviar e-mail de teste'}
