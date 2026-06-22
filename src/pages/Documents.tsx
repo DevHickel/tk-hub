@@ -1206,7 +1206,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
           }
         }}
       >
-        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+        <SheetContent className="w-[90vw] sm:w-[540px] sm:max-w-[540px] overflow-y-auto">
           {selected && (
             <>
               <SheetHeader>
