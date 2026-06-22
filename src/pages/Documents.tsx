@@ -697,8 +697,8 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
       {/* Upload + filters */}
       <Card>
         <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3">
+            <div className="relative w-full md:flex-1 md:min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por colaborador, curso ou arquivo..."
@@ -708,7 +708,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full md:w-40">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -722,7 +722,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
               </SelectContent>
             </Select>
             <Select value={expiryFilter} onValueChange={setExpiryFilter}>
-              <SelectTrigger className="w-48">
+              <SelectTrigger className="w-full md:w-48">
                 <SelectValue placeholder="Vencimento" />
               </SelectTrigger>
               <SelectContent>
@@ -731,7 +731,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
                 <SelectItem value="expired">Vencidos</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
+            <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 w-full md:w-auto md:shrink-0">
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
               {uploading
                 ? (uploadProgress.total > 1 ? `Enviando ${uploadProgress.current}/${uploadProgress.total}...` : 'Enviando...')
@@ -740,7 +740,7 @@ function CertificatesTab({ initialExpiryFilter = 'all' }: { initialExpiryFilter?
             <Button
               variant="outline"
               onClick={() => setManualOpen(true)}
-              className="gap-2 shrink-0"
+              className="gap-2 w-full md:w-auto md:shrink-0"
             >
               <Plus className="h-4 w-4" />
               Adicionar manualmente
@@ -1563,8 +1563,8 @@ function RagTab() {
     <div className="space-y-4">
       <Card>
         <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
+          <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-3">
+            <div className="relative w-full md:flex-1 md:min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nome do arquivo..."
@@ -1573,17 +1573,19 @@ function RagTab() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="icon" onClick={fetchDocs} disabled={loading} title="Atualizar lista">
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-            <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 shrink-0">
-              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {uploading
-                ? uploadProgress.total > 1
-                  ? `Enviando ${uploadProgress.current}/${uploadProgress.total}...`
-                  : 'Enviando...'
-                : 'Enviar PDF'}
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="icon" onClick={fetchDocs} disabled={loading} title="Atualizar lista" className="shrink-0">
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="gap-2 flex-1 md:flex-initial md:shrink-0">
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploading
+                  ? uploadProgress.total > 1
+                    ? `Enviando ${uploadProgress.current}/${uploadProgress.total}...`
+                    : 'Enviando...'
+                  : 'Enviar PDF'}
+              </Button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"

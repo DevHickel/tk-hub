@@ -429,9 +429,9 @@ export default function Admin() {
           <TabsContent value="users">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                   <span>Gerenciar Usuários</span>
-                  <div className="relative w-64">
+                  <div className="relative w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Buscar usuário..."
@@ -584,7 +584,7 @@ export default function Admin() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex gap-4">
+                <div className="flex flex-col md:flex-row gap-3 md:gap-4">
                   <div className="flex-1">
                     <Input
                       type="email"
@@ -594,7 +594,7 @@ export default function Admin() {
                       onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
                     />
                   </div>
-                  <Button onClick={sendInvite} disabled={isSendingInvite} className="flex items-center gap-2">
+                  <Button onClick={sendInvite} disabled={isSendingInvite} className="flex items-center justify-center gap-2 w-full md:w-auto">
                     {isSendingInvite ? (
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground border-t-transparent" />
                     ) : (

@@ -315,8 +315,8 @@ export default function BugReport() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Filters */}
-                  <div className="flex flex-wrap gap-4 p-4 bg-muted/50 rounded-lg">
-                    <div className="flex-1 min-w-[200px]">
+                  <div className="flex flex-col md:flex-row md:flex-wrap gap-3 md:gap-4 p-4 bg-muted/50 rounded-lg">
+                    <div className="w-full md:flex-1 md:min-w-[200px]">
                       <Label className="text-xs text-muted-foreground mb-1 block">Status</Label>
                       <Select value={filterStatus} onValueChange={setFilterStatus}>
                         <SelectTrigger>
@@ -329,39 +329,42 @@ export default function BugReport() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex-1 min-w-[200px]">
+                    <div className="w-full md:flex-1 md:min-w-[200px]">
                       <Label className="text-xs text-muted-foreground mb-1 block">Nome do usuário</Label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          placeholder="Buscar por nome..." 
+                        <Input
+                          placeholder="Buscar por nome..."
                           value={filterName}
                           onChange={(e) => setFilterName(e.target.value)}
                           className="pl-9"
                         />
                       </div>
                     </div>
-                    <div className="flex-1 min-w-[150px]">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Data inicial</Label>
-                      <Input 
-                        type="date" 
-                        value={filterDateFrom}
-                        onChange={(e) => setFilterDateFrom(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-[150px]">
-                      <Label className="text-xs text-muted-foreground mb-1 block">Data final</Label>
-                      <Input 
-                        type="date" 
-                        value={filterDateTo}
-                        onChange={(e) => setFilterDateTo(e.target.value)}
-                      />
+                    <div className="grid grid-cols-2 gap-3 md:contents">
+                      <div className="md:flex-1 md:min-w-[150px]">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Data inicial</Label>
+                        <Input
+                          type="date"
+                          value={filterDateFrom}
+                          onChange={(e) => setFilterDateFrom(e.target.value)}
+                        />
+                      </div>
+                      <div className="md:flex-1 md:min-w-[150px]">
+                        <Label className="text-xs text-muted-foreground mb-1 block">Data final</Label>
+                        <Input
+                          type="date"
+                          value={filterDateTo}
+                          onChange={(e) => setFilterDateTo(e.target.value)}
+                        />
+                      </div>
                     </div>
                     {(filterStatus !== 'all' || filterName || filterDateFrom || filterDateTo) && (
-                      <div className="flex items-end">
-                        <Button 
-                          variant="ghost" 
+                      <div className="flex md:items-end">
+                        <Button
+                          variant="ghost"
                           size="sm"
+                          className="w-full md:w-auto"
                           onClick={() => {
                             setFilterStatus('all');
                             setFilterName('');
