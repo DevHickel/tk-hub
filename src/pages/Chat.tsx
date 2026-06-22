@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -76,6 +77,7 @@ export default function Chat() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [lightbox, setLightbox] = useState<{ msgId: string; idx: number } | null>(null);
+  const [convDrawerOpen, setConvDrawerOpen] = useState(false);
   const { collapsed: sidebarCollapsed, toggle: toggleSidebar, collapse: collapseSidebar } = useSidebarCollapsed(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -278,6 +280,77 @@ export default function Chat() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
+  // Renderiza o conteúdo da lista de conversas (botão Nova + agrupamentos).
+  // afterSelect é chamado depois de selecionar/criar uma conv — usado pra fechar
+  // o drawer em mobile.
+  const renderConversationsList = (afterSelect?: () => void) => (
+    <>
+      <div className="p-3 border-b">
+        <Button
+          className="w-full gap-2"
+          onClick={() => {
+            handleNewConversation();
+            afterSelect?.();
+          }}
+        >
+          <Plus className="h-4 w-4" />
+          Nova Conversa
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1 [&>div>div]:!overflow-x-hidden">
+        <div className="p-2 space-y-1 overflow-hidden">
+          {pinnedConvs.length > 0 && (
+            <>
+              <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Fixadas</p>
+              {pinnedConvs.map(conv => (
+                <ConvItem
+                  key={conv.id}
+                  conv={conv}
+                  active={currentConversationId === conv.id}
+                  renamingId={renamingId}
+                  renameValue={renameValue}
+                  onSelect={() => { setCurrentConversationId(conv.id); afterSelect?.(); }}
+                  onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
+                  onRenameChange={setRenameValue}
+                  onRenameSubmit={() => handleRenameSubmit(conv.id)}
+                  onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
+                  onDelete={() => handleDeleteConversation(conv.id)}
+                />
+              ))}
+              <div className="border-t my-1" />
+            </>
+          )}
+          {unpinnedConvs.length > 0 && (
+            <>
+              <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Histórico</p>
+              {unpinnedConvs.map(conv => (
+                <ConvItem
+                  key={conv.id}
+                  conv={conv}
+                  active={currentConversationId === conv.id}
+                  renamingId={renamingId}
+                  renameValue={renameValue}
+                  onSelect={() => { setCurrentConversationId(conv.id); afterSelect?.(); }}
+                  onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
+                  onRenameChange={setRenameValue}
+                  onRenameSubmit={() => handleRenameSubmit(conv.id)}
+                  onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
+                  onDelete={() => handleDeleteConversation(conv.id)}
+                />
+              ))}
+            </>
+          )}
+          {conversations.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-8 px-4">
+              Nenhuma conversa ainda. Comece digitando uma mensagem!
+            </p>
+          )}
+        </div>
+      </ScrollArea>
+    </>
+  );
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -290,66 +363,17 @@ export default function Chat() {
     <div className="flex h-screen bg-background overflow-hidden">
       <AppSidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} onCollapse={collapseSidebar} />
 
-      {/* Conversations panel */}
-      <div className="flex-[0_0_240px] border-r bg-card flex flex-col overflow-hidden">
-        <div className="p-3 border-b">
-          <Button className="w-full gap-2" onClick={handleNewConversation}>
-            <Plus className="h-4 w-4" />
-            Nova Conversa
-          </Button>
-        </div>
-
-        <ScrollArea className="flex-1 [&>div>div]:!overflow-x-hidden">
-          <div className="p-2 space-y-1 overflow-hidden">
-            {pinnedConvs.length > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Fixadas</p>
-                {pinnedConvs.map(conv => (
-                  <ConvItem
-                    key={conv.id}
-                    conv={conv}
-                    active={currentConversationId === conv.id}
-                    renamingId={renamingId}
-                    renameValue={renameValue}
-                    onSelect={() => setCurrentConversationId(conv.id)}
-                    onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
-                    onRenameChange={setRenameValue}
-                    onRenameSubmit={() => handleRenameSubmit(conv.id)}
-                    onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
-                    onDelete={() => handleDeleteConversation(conv.id)}
-                  />
-                ))}
-                <div className="border-t my-1" />
-              </>
-            )}
-            {unpinnedConvs.length > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground px-2 py-1 font-medium">Histórico</p>
-                {unpinnedConvs.map(conv => (
-                  <ConvItem
-                    key={conv.id}
-                    conv={conv}
-                    active={currentConversationId === conv.id}
-                    renamingId={renamingId}
-                    renameValue={renameValue}
-                    onSelect={() => setCurrentConversationId(conv.id)}
-                    onRenameStart={() => { setRenamingId(conv.id); setRenameValue(conv.title); }}
-                    onRenameChange={setRenameValue}
-                    onRenameSubmit={() => handleRenameSubmit(conv.id)}
-                    onPin={() => handlePinConversation(conv.id, !conv.is_pinned)}
-                    onDelete={() => handleDeleteConversation(conv.id)}
-                  />
-                ))}
-              </>
-            )}
-            {conversations.length === 0 && (
-              <p className="text-xs text-muted-foreground text-center py-8 px-4">
-                Nenhuma conversa ainda. Comece digitando uma mensagem!
-              </p>
-            )}
-          </div>
-        </ScrollArea>
+      {/* Conversations panel — desktop */}
+      <div className="hidden md:flex flex-[0_0_240px] border-r bg-card flex-col overflow-hidden">
+        {renderConversationsList()}
       </div>
+
+      {/* Conversations drawer — mobile (open via header button) */}
+      <Sheet open={convDrawerOpen} onOpenChange={setConvDrawerOpen}>
+        <SheetContent side="right" className="w-[85vw] sm:w-80 p-0 flex flex-col">
+          {renderConversationsList(() => setConvDrawerOpen(false))}
+        </SheetContent>
+      </Sheet>
 
       {/* Chat area */}
       <div className="flex-1 flex flex-col min-w-0">
@@ -361,11 +385,22 @@ export default function Chat() {
               <p className="text-xs text-muted-foreground truncate">Tkzinho — powered by IA</p>
             </div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setConvDrawerOpen(true)}
+              aria-label="Abrir conversas"
+            >
+              <MessageSquare className="h-5 w-5" />
+            </Button>
+            <ThemeToggle />
+          </div>
         </header>
 
         <ScrollArea className="flex-1">
-          <div className="max-w-3xl mx-auto p-6 space-y-6">
+          <div className="max-w-3xl mx-auto px-4 py-4 md:p-6 space-y-6">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-24">
                 <img src={tkzinhoAvatar} alt="Tkzinho" className="h-20 w-20 rounded-full object-cover mb-4 shadow-md" />
@@ -387,7 +422,7 @@ export default function Chat() {
                     ) : (
                       <img src={tkzinhoAvatar} alt="Tkzinho" className="h-8 w-8 rounded-full object-cover shrink-0" />
                     )}
-                    <div className={cn('flex flex-col gap-1 max-w-[75%]', isUser ? 'items-end' : 'items-start')}>
+                    <div className={cn('flex flex-col gap-1 max-w-[85%] sm:max-w-[75%]', isUser ? 'items-end' : 'items-start')}>
                       <div
                         className={cn(
                           'rounded-2xl px-4 py-3 text-sm leading-relaxed',
@@ -484,7 +519,7 @@ export default function Chat() {
         </ScrollArea>
 
         {/* Input */}
-        <div className="p-4 border-t bg-card shrink-0">
+        <div className="px-4 pt-4 border-t bg-card shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <div className="max-w-3xl mx-auto">
             <div className="flex gap-2 items-end">
               <textarea
