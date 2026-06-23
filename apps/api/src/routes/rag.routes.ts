@@ -44,8 +44,15 @@ ragRoutes.post(
       const { answer, chatHistoryId, sources } = await answerQuestion(message, userId, conversation_id)
       return c.json({ response: answer, chat_history_id: chatHistoryId, sources })
     } catch (error) {
+      const err = error as Error & { code?: string; status?: number }
       Sentry.captureException(error, { tags: { route: '/api/chat', userId } })
-      safeLog('error', 'Erro no /api/chat', { error: (error as Error).message })
+      safeLog('error', 'Erro no /api/chat', {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        status: err.status,
+        stack: err.stack?.split('\n').slice(0, 8).join('\n'),
+      })
       return c.json({ error: 'Internal server error' }, 500)
     }
   }
