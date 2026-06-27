@@ -263,4 +263,38 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // ── Integração TK Solution (Fase 0 — terreno preparado) ────────────────────
+  getTKSyncConfig: () => request<TKSyncConfig>('/api/sync/tk/config'),
+
+  updateTKSyncConfig: (data: { active?: boolean; base_url?: string | null; api_token?: string | null }) =>
+    request<{ success: boolean }>('/api/sync/tk/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  rotateTKSecret: () =>
+    request<{ secret: string; hash_preview: string }>('/api/sync/tk/secret', { method: 'POST' }),
+
+  listTKSyncEvents: () => request<TKSyncEvent[]>('/api/sync/tk/events'),
+}
+
+export interface TKSyncConfig {
+  provider: 'tk'
+  active: boolean
+  base_url: string | null
+  api_token_masked: string
+  has_secret: boolean
+  last_event_at: string | null
+  last_error: string | null
+  events_count: number
+}
+
+export interface TKSyncEvent {
+  id: string
+  event_type: string
+  external_id: string | null
+  status: string
+  error_message: string | null
+  created_at: string
 }

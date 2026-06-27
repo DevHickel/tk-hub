@@ -13,7 +13,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileNavTrigger } from '@/components/MobileNavTrigger';
 import { useSidebarCollapsed } from '@/hooks/useSidebarCollapsed';
-import { Users, Activity, Search, Trash2, Mail, Copy, UserPlus, Loader2 } from 'lucide-react';
+import { Users, Activity, Search, Trash2, Mail, Copy, UserPlus, Loader2, Plug } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,6 +23,7 @@ import { logActivity, ACTION_LABELS } from '@/lib/activity';
 import { api } from '@/lib/api';
 import { EmailConfigTab } from '@/components/admin/EmailConfigTab';
 import { InboxConfigTab } from '@/components/admin/InboxConfigTab';
+import { TKIntegrationTab } from '@/components/admin/TKIntegrationTab';
 
 type AppRole = 'admin' | 'manager' | 'user';
 
@@ -401,7 +402,7 @@ export default function Admin() {
           </div>
         ) : (
         <Tabs defaultValue={isAdmin ? "users" : "invites"} className="space-y-6">
-          <TabsList className={`grid w-full ${isAdmin ? 'max-w-2xl grid-cols-4' : 'max-w-md grid-cols-1'}`}>
+          <TabsList className={`grid w-full ${isAdmin ? 'max-w-3xl grid-cols-5' : 'max-w-md grid-cols-1'}`}>
             {isAdmin && (
               <TabsTrigger value="users" className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -422,6 +423,12 @@ export default function Admin() {
               <TabsTrigger value="email" className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
                 E-mail
+              </TabsTrigger>
+            )}
+            {isAdmin && (
+              <TabsTrigger value="integrations" className="flex items-center gap-2">
+                <Plug className="h-4 w-4" />
+                Integrações
               </TabsTrigger>
             )}
           </TabsList>
@@ -829,6 +836,12 @@ export default function Admin() {
                   <InboxConfigTab canEdit={isAdmin} />
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="integrations">
+              <TKIntegrationTab canEdit={isAdmin} />
             </TabsContent>
           )}
 

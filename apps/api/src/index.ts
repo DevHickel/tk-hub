@@ -18,6 +18,7 @@ import { reportsRoutes } from './routes/reports.routes.js'
 import { certificatesRoutes } from './routes/certificates.routes.js'
 import { invitesRoutes } from './routes/invites.routes.js'
 import { registerRoutes } from './routes/register.routes.js'
+import { syncRoutes } from './routes/sync.routes.js'
 import { setupWorkers } from './workers/index.js'
 import { setupCron } from './services/cron.service.js'
 import { setupReportCron } from './services/reports/report.cron.js'
@@ -71,7 +72,7 @@ app.use(
 
 // ── Middleware de autenticação (backend/SKILL.md) ─────────────────────────────
 // Rotas que não passam pelo middleware de auth JWT
-const PUBLIC_PATHS = ['/health', '/api/webhook/gmail', '/api/register']
+const PUBLIC_PATHS = ['/health', '/api/webhook/gmail', '/api/register', '/api/sync/tk/procedures']
 
 app.use('*', async (c, next) => {
   if (PUBLIC_PATHS.includes(c.req.path)) return next()
@@ -109,6 +110,7 @@ app.route('/api', reportsRoutes)
 app.route('/api', certificatesRoutes)
 app.route('/api', invitesRoutes)
 app.route('/api', registerRoutes)
+app.route('/api', syncRoutes)
 
 // ── Catch-all para debug do mistério do 405 ──────────────────────────────────
 app.notFound((c) => {

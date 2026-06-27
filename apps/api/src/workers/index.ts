@@ -1,6 +1,7 @@
 import { setupPdfWorker } from './pdf.worker.js'
 import { setupEmailWorker } from './email.worker.js'
 import { setupCertificateWorker } from './certificate.worker.js'
+import { setupTKProcedureSyncWorker } from './tk-procedure-sync.worker.js'
 import { safeLog } from '../lib/logger.js'
 
 export function setupWorkers() {
@@ -8,5 +9,6 @@ export function setupWorkers() {
   setupPdfWorker()
   setupEmailWorker()
   setupCertificateWorker()
-  safeLog('info', 'Workers iniciados: pdf-processing, email-processing, certificate-extraction')
+  setupTKProcedureSyncWorker()
+  safeLog('info', 'Workers iniciados: pdf-processing, email-processing, certificate-extraction, tk-procedure-sync')
 }

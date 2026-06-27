@@ -4,4 +4,5 @@ export const QUEUES = {
   EMAIL_PROCESSING: 'email-processing',
   EMBEDDING_GENERATION: 'embedding-generation',
   CERTIFICATE_EXTRACTION: 'certificate-extraction',
+  TK_PROCEDURE_SYNC: 'tk-procedure-sync',
 } as const
